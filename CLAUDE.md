@@ -98,33 +98,50 @@ direction:
 
 ## Issue backlog
 
-Candidate GitHub issues on `andresest83/kubundictate`, not yet filed --
-create via `gh issue create` when ready, one feature branch per issue:
+Filed as GitHub issues on `andresest83/kubundictate`, one feature branch
+per issue:
 
-1. **Run the server as a Windows service** -- so it survives reboot/logout
-   without a terminal window open. Keeping the terminal open is fine for
-   testing; this is the "make it production-grade on the GPU box" item.
-2. **Automate the Windows Firewall inbound rule** -- default port is now
-   `50505` (private/dynamic range, chosen to avoid colliding with common
-   dev tooling on 8000/3000/5000/8080/etc., same reasoning FluidVoice
-   used for its own local API on 47733). What's still manual: Windows'
-   per-executable firewall prompt doesn't follow venv `python.exe` copies
-   (a different file from the base interpreter -- see #3), so switching
-   between them can silently break LAN connectivity. Automate rule
-   provisioning as part of setup/service registration.
-3. **One-shot installer (winget or similar)** -- automate venv creation,
-   dependency install, port/firewall setup, and (once #1 lands) service
-   registration, so a new machine goes from `git clone` to running with
-   one command instead of today's manual multi-step setup.
-4. **Auto-paste vs. clipboard-only** (see Product notes) -- investigate a
-   Windows `SendInput`-based auto-paste option as an alternative to
-   copy-then-manual-Ctrl+V.
-5. **LLM cleanup pass** (see Product notes) -- optional post-processing
-   step that sends the raw transcript + a configurable system prompt to
-   a local/cloud OpenAI-compatible endpoint before returning text.
-6. **Process hygiene** (see Product notes) -- CI lint gate, PR template
-   with a test checklist, issue templates, CONTRIBUTING.md, docs-only-PR
-   path filter to skip CI.
+- [#2](https://github.com/andresest83/kubundictate/issues/2) **Run the
+  server as a Windows service** (`priority: high`) -- so it survives
+  reboot/logout without a terminal window open. Keeping the terminal
+  open is fine for testing; this is the "make it production-grade on
+  the GPU box" item.
+- [#3](https://github.com/andresest83/kubundictate/issues/3) **Automate
+  the Windows Firewall inbound rule** (`priority: high`) -- default port
+  is now `50505` (private/dynamic range, chosen to avoid colliding with
+  common dev tooling on 8000/3000/5000/8080/etc., same reasoning
+  FluidVoice used for its own local API on 47733). What's still manual:
+  Windows' per-executable firewall prompt doesn't follow venv
+  `python.exe` copies (a different file from the base interpreter --
+  see #8), so switching between them can silently break LAN
+  connectivity. Automate rule provisioning as part of setup/service
+  registration.
+- [#4](https://github.com/andresest83/kubundictate/issues/4) **One-shot
+  installer (winget or similar)** (`priority: high`) -- automate venv
+  creation, dependency install, port/firewall setup, and (once #2
+  lands) service registration, so a new machine goes from `git clone`
+  to running with one command instead of today's manual multi-step
+  setup.
+- [#8](https://github.com/andresest83/kubundictate/issues/8) **Guided
+  remote-client setup: endpoint discovery + Windows tray app**
+  (`priority: high`) -- server prints its LAN/Tailscale IP at startup,
+  client setup surfaces those instead of hand-editing `config.bat`,
+  client supports multiple saved endpoints, and ships as a tray app
+  instead of a console window. The client-facing payoff of #2/#3/#4.
+- [#5](https://github.com/andresest83/kubundictate/issues/5)
+  **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
+  notes) -- investigate a Windows `SendInput`-based auto-paste option
+  as an alternative to copy-then-manual-Ctrl+V.
+- [#7](https://github.com/andresest83/kubundictate/issues/7) **Process
+  hygiene** (`priority: low`, see Product notes) -- CI lint gate, PR
+  template with a test checklist, issue templates, CONTRIBUTING.md,
+  docs-only-PR path filter to skip CI.
+- [#6](https://github.com/andresest83/kubundictate/issues/6) **LLM
+  cleanup pass** (`priority: lowest`, see Product notes) -- optional
+  post-processing step that sends the raw transcript + a configurable
+  system prompt to a local/cloud OpenAI-compatible endpoint before
+  returning text. Deprioritized further after real-world testing showed
+  raw faster-whisper output is already clean without it.
 
 ## Files
 
