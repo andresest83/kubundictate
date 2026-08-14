@@ -15,6 +15,8 @@ this file covers Claude-specific working agreement and roadmap only.
   PRs, from the first commit onward.
 - No large/architectural changes without planning with the user first --
   don't jump straight to installs or big modifications unilaterally.
+- New work starts as a GitHub issue on `andresest83/kubundictate`; feature
+  branches and PRs reference the issue they implement.
 
 ## Roadmap: LAN-accessible dictation
 
@@ -94,8 +96,35 @@ direction:
   Actions workflow, PR template, issue templates, CONTRIBUTING.md) are
   cheap to add and read well for a portfolio repo.
 
-To be turned into GitHub issues on `andresest83/kubundictate` later (not
-yet done -- ask before creating).
+## Issue backlog
+
+Candidate GitHub issues on `andresest83/kubundictate`, not yet filed --
+create via `gh issue create` when ready, one feature branch per issue:
+
+1. **Run the server as a Windows service** -- so it survives reboot/logout
+   without a terminal window open. Keeping the terminal open is fine for
+   testing; this is the "make it production-grade on the GPU box" item.
+2. **Automate the Windows Firewall inbound rule** -- default port is now
+   `50505` (private/dynamic range, chosen to avoid colliding with common
+   dev tooling on 8000/3000/5000/8080/etc., same reasoning FluidVoice
+   used for its own local API on 47733). What's still manual: Windows'
+   per-executable firewall prompt doesn't follow venv `python.exe` copies
+   (a different file from the base interpreter -- see #3), so switching
+   between them can silently break LAN connectivity. Automate rule
+   provisioning as part of setup/service registration.
+3. **One-shot installer (winget or similar)** -- automate venv creation,
+   dependency install, port/firewall setup, and (once #1 lands) service
+   registration, so a new machine goes from `git clone` to running with
+   one command instead of today's manual multi-step setup.
+4. **Auto-paste vs. clipboard-only** (see Product notes) -- investigate a
+   Windows `SendInput`-based auto-paste option as an alternative to
+   copy-then-manual-Ctrl+V.
+5. **LLM cleanup pass** (see Product notes) -- optional post-processing
+   step that sends the raw transcript + a configurable system prompt to
+   a local/cloud OpenAI-compatible endpoint before returning text.
+6. **Process hygiene** (see Product notes) -- CI lint gate, PR template
+   with a test checklist, issue templates, CONTRIBUTING.md, docs-only-PR
+   path filter to skip CI.
 
 ## Files
 

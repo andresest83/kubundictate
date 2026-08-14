@@ -7,14 +7,14 @@ set KUBUNDICTATE_MODE=client
 
 REM --- Server settings (only used when KUBUNDICTATE_MODE=server) ---
 REM set KUBUNDICTATE_HOST=0.0.0.0
-REM set KUBUNDICTATE_PORT=8000
+REM set KUBUNDICTATE_PORT=50505
 REM set KUBUNDICTATE_MODEL=large-v3-turbo
 REM set KUBUNDICTATE_LANGUAGE=en
 
 REM --- Client settings (only used when KUBUNDICTATE_MODE=client) ---
 REM Point this at the server: LAN IP for same-network use, or a Tailscale
 REM IP/hostname (100.x.x.x) for off-LAN use.
-set KUBUNDICTATE_SERVER_URL=http://192.168.1.50:8000
+set KUBUNDICTATE_SERVER_URL=http://192.168.1.50:50505
 
 REM --- Optional shared secret (set the same value on server + client) ---
 REM set KUBUNDICTATE_TOKEN=change-me

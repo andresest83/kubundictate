@@ -38,13 +38,13 @@ set KUBUNDICTATE_MODE=server
 
 Then run `start.bat`. First run downloads the model (~1.6GB for
 `large-v3-turbo`) to the Hugging Face cache. Leave it running -- it's a
-resident process serving requests on `KUBUNDICTATE_PORT` (default 8000).
+resident process serving requests on `KUBUNDICTATE_PORT` (default 50505).
 
 ### Client (any Windows PC, including the GPU box itself)
 
 ```
 set KUBUNDICTATE_MODE=client
-set KUBUNDICTATE_SERVER_URL=http://<server-ip>:8000
+set KUBUNDICTATE_SERVER_URL=http://<server-ip>:50505
 ```
 
 Then run `start.bat`.
@@ -57,7 +57,7 @@ Then run `start.bat`.
   server unreachable) -- so you don't need to watch the console.
 
 If you want hotkey dictation directly on the GPU box too, run a second
-`client` process there pointed at `http://localhost:8000` alongside the
+`client` process there pointed at `http://localhost:50505` alongside the
 `server` process.
 
 ## Run silently / at startup
@@ -77,11 +77,11 @@ Set these in `config.bat` (or the environment before running):
 
 - `KUBUNDICTATE_MODE` -- `server` or `client`. Required, no default.
 - `KUBUNDICTATE_SERVER_URL` -- (client only) the server's address, e.g.
-  `http://192.168.1.50:8000` on the LAN, or a
+  `http://192.168.1.50:50505` on the LAN, or a
   [Tailscale](https://tailscale.com/) IP/hostname for off-LAN use.
   Required for client mode.
 - `KUBUNDICTATE_HOST` -- (server only) bind address. Default `0.0.0.0`.
-- `KUBUNDICTATE_PORT` -- (server only) port. Default `8000`.
+- `KUBUNDICTATE_PORT` -- (server only) port. Default `50505`.
 - `KUBUNDICTATE_MODEL` -- (server only) faster-whisper model size/name.
   Default `large-v3-turbo`. Smaller/faster options: `distil-large-v3`,
   `medium`, `small`. See
