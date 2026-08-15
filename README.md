@@ -15,6 +15,16 @@ It runs as two modes from the same codebase:
   the server, and copies the returned text to your clipboard. No GPU or
   model download required.
 
+## Status
+
+- **Windows client/server**: working. Server on the GPU box, thin
+  clients on any Windows PC on the LAN.
+- **Runs unattended at boot**: working, via a Windows Scheduled Task
+  (see "Run as a service" below) -- verified surviving a reboot with no
+  one logged in.
+- **Mac client**: planned, not started.
+- **Android client**: planned, not started.
+
 ## Setup
 
 Both modes share one venv and one entrypoint (`kubundictate.py`); which

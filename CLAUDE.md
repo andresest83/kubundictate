@@ -102,10 +102,14 @@ Filed as GitHub issues on `andresest83/kubundictate`, one feature branch
 per issue:
 
 - [#2](https://github.com/andresest83/kubundictate/issues/2) **Run the
-  server as a Windows service** (`priority: high`) -- so it survives
-  reboot/logout without a terminal window open. Keeping the terminal
-  open is fine for testing; this is the "make it production-grade on
-  the GPU box" item.
+  server as a Windows service** (`priority: high`) -- **implemented and
+  verified 2026-08-14** via `install_service.ps1` (Windows Scheduled
+  Task, not a real service -- see PR
+  [#9](https://github.com/andresest83/kubundictate/pull/9)). User
+  confirmed the task ran successfully after a full reboot with the
+  server coming up unattended. PR #9 targets `feature/windows-client-server`
+  (not yet merged); merge #9 into that branch, then that branch into
+  `main` via PR #1, to close out.
 - [#3](https://github.com/andresest83/kubundictate/issues/3) **Automate
   the Windows Firewall inbound rule** (`priority: high`) -- default port
   is now `50505` (private/dynamic range, chosen to avoid colliding with
