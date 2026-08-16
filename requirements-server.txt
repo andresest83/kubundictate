@@ -1,0 +1,7 @@
+faster-whisper
+numpy
+nvidia-cublas-cu12
+nvidia-cudnn-cu12
+fastapi
+uvicorn
+python-multipart
