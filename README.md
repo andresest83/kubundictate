@@ -83,9 +83,11 @@ Then run `start.bat`.
   successful transcription, and a low beep marks a failed request (e.g.
   server unreachable) -- so you don't need to watch the console.
 
-If you want hotkey dictation directly on the GPU box too, run a second
-`client` process there pointed at `http://localhost:50505` alongside the
-`server` process.
+If you want hotkey dictation directly on the GPU box too, run
+`start_local_client.bat` -- it reuses this box's own `config.bat`
+(port and token) and points itself at `localhost`. `install.ps1`'s
+server path offers to set this up (installs the small client
+dependencies into the same venv) right after server setup.
 
 ## Run silently / at startup
 
@@ -203,6 +205,9 @@ VRAM-hungry, drop to `distil-large-v3` or `medium` via `KUBUNDICTATE_MODEL`.
 - `install.ps1` -- one-shot setup: venv, dependencies, `config.bat`,
   firewall rule, and (optionally) the startup service (see "Quick install")
 - `start.bat` / `start_hidden.bat` / `start_silent.vbs` -- launchers
+- `start_local_client.bat` -- launches a local client on the GPU box
+  itself, pointed at its own server on `localhost` (see "Server (the
+  GPU box)")
 - `install_service.ps1` / `uninstall_service.ps1` -- register/remove the
   server as a Scheduled Task that runs at boot (see "Run as a service")
 - `config.bat.example` -- template for per-machine settings (copy to
