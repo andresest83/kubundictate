@@ -103,29 +103,39 @@ if ($writeConfig) {
 
         Write-Output ""
         Write-Output "Without a shared token, anyone who can route to this server on your LAN can use it to transcribe."
-        $tokenInput = Read-Host "Shared token (Enter = auto-generate a strong one, or type your own: 8+ chars with a letter, a number, and a special character)"
-        if ([string]::IsNullOrWhiteSpace($tokenInput)) {
+        $tokenInput = Read-Host "Shared token (Enter = auto-generate a strong one, type your own: 8+ chars with a letter, a number, and a special character, or 'skip' to leave it off)"
+        if ($tokenInput.Trim().ToLower() -eq "skip") {
+            $token = $null
+        } elseif ([string]::IsNullOrWhiteSpace($tokenInput)) {
             $token = New-StrongToken
         } else {
             while (-not (Test-TokenStrength $tokenInput)) {
-                $tokenInput = Read-Host "Needs 8+ characters with a letter, a number, and a special character (Enter = auto-generate instead)"
+                if ($tokenInput.Trim().ToLower() -eq "skip") { break }
+                $tokenInput = Read-Host "Needs 8+ characters with a letter, a number, and a special character (Enter = auto-generate, 'skip' to leave it off)"
                 if ([string]::IsNullOrWhiteSpace($tokenInput)) {
                     $tokenInput = New-StrongToken
                     break
                 }
             }
-            $token = $tokenInput
+            $token = if ($tokenInput.Trim().ToLower() -eq "skip") { $null } else { $tokenInput }
         }
-        Write-Output "Token: $token"
-        Write-Output "Copy this into KUBUNDICTATE_TOKEN on every client's config.bat."
+
+        if ($token) {
+            Write-Output "Token: $token"
+            Write-Output "Copy this into KUBUNDICTATE_TOKEN on every client's config.bat."
+        } else {
+            Write-Output "Skipping the shared token -- this server will accept requests from anyone who can reach it."
+        }
 
         $lines = @(
             "@echo off",
             "set KUBUNDICTATE_MODE=server",
             "set KUBUNDICTATE_PORT=$port",
-            "set KUBUNDICTATE_MODEL=$model",
-            "set KUBUNDICTATE_TOKEN=$token"
+            "set KUBUNDICTATE_MODEL=$model"
         )
+        if ($token) {
+            $lines += "set KUBUNDICTATE_TOKEN=$token"
+        }
         if (-not [string]::IsNullOrWhiteSpace($language)) {
             $lines += "set KUBUNDICTATE_LANGUAGE=$language"
         }
