@@ -89,8 +89,24 @@ Write-Output ""
 # --- config.bat ---
 $writeConfig = $true
 if (Test-Path $configPath) {
-    $overwrite = Read-Host "config.bat already exists. Overwrite it? [y/N]"
-    $writeConfig = $overwrite.Trim().ToLower() -eq "y"
+    $existingModeMatch = Select-String -Path $configPath -Pattern 'KUBUNDICTATE_MODE=(\w+)' | Select-Object -First 1
+    $existingMode = if ($existingModeMatch) { $existingModeMatch.Matches[0].Groups[1].Value } else { $null }
+
+    if ($existingMode -and $existingMode -ne $mode) {
+        Write-Output ""
+        Write-Warning "This folder is currently configured as a $existingMode (config.bat has KUBUNDICTATE_MODE=$existingMode)."
+        if ($existingMode -eq "server") {
+            Write-Output "Want to dictate locally on this same box instead? You don't need to reconfigure it as a client -- run start_local_client.bat, which reuses this server's own settings (install.ps1's server path can set this up for you)."
+        }
+        $confirmSwitch = Read-Host "Continue and overwrite config.bat to make this box a $mode instead? [y/N]"
+        if ($confirmSwitch.Trim().ToLower() -ne "y") {
+            Write-Output "Leaving config.bat untouched."
+            exit 0
+        }
+    } else {
+        $overwrite = Read-Host "config.bat already exists. Overwrite it? [y/N]"
+        $writeConfig = $overwrite.Trim().ToLower() -eq "y"
+    }
 }
 
 if ($writeConfig) {
@@ -193,6 +209,19 @@ if ($mode -eq "server") {
     if ($registerAnswer.Trim().ToLower() -eq "y") {
         & (Join-Path $scriptDir "install_service.ps1")
         $serviceRegistered = $true
+    }
+    Write-Output ""
+
+    $localClientAnswer = Read-Host "Also dictate directly from this box (a local client hitting your own server at localhost)? [y/N]"
+    if ($localClientAnswer.Trim().ToLower() -eq "y") {
+        Write-Output "Installing client dependencies into this same venv..."
+        & $venvPython -m pip install -r (Join-Path $scriptDir "requirements-client.txt")
+        $localClientScript = Join-Path $scriptDir "start_local_client.bat"
+        if (Test-Path $localClientScript) {
+            Write-Output "Run start_local_client.bat on this box to dictate locally."
+        } else {
+            Write-Warning "start_local_client.bat not found next to this script -- expected it to ship with the repo."
+        }
     }
     Write-Output ""
 
