@@ -17,6 +17,30 @@ function Test-IsAdmin {
     ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Test-TokenStrength([string]$Token) {
+    $Token.Length -ge 8 -and $Token -cmatch '[A-Za-z]' -and $Token -cmatch '[0-9]' -and $Token -match '[^A-Za-z0-9]'
+}
+
+function New-StrongToken {
+    # Guarantees at least one letter, one digit, and one special character
+    # rather than relying on chance from a mixed charset.
+    $letters = [char[]]'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    $digits = [char[]]'23456789'
+    $specials = [char[]]'!@#%^*-_='
+    $all = $letters + $digits + $specials
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+
+    function Get-RandomChar($set) {
+        $b = New-Object byte[] 1
+        $rng.GetBytes($b)
+        $set[$b[0] % $set.Length]
+    }
+
+    $tokenChars = @((Get-RandomChar $letters), (Get-RandomChar $digits), (Get-RandomChar $specials))
+    1..21 | ForEach-Object { $tokenChars += Get-RandomChar $all }
+    -join ($tokenChars | Sort-Object { Get-Random })
+}
+
 Write-Output "=== KubunDictate installer ==="
 Write-Output ""
 
@@ -77,11 +101,30 @@ if ($writeConfig) {
         if ([string]::IsNullOrWhiteSpace($model)) { $model = "large-v3-turbo" }
         $language = Read-Host "Force language code, e.g. 'en' (blank = auto-detect)"
 
+        Write-Output ""
+        Write-Output "Without a shared token, anyone who can route to this server on your LAN can use it to transcribe."
+        $tokenInput = Read-Host "Shared token (Enter = auto-generate a strong one, or type your own: 8+ chars with a letter, a number, and a special character)"
+        if ([string]::IsNullOrWhiteSpace($tokenInput)) {
+            $token = New-StrongToken
+        } else {
+            while (-not (Test-TokenStrength $tokenInput)) {
+                $tokenInput = Read-Host "Needs 8+ characters with a letter, a number, and a special character (Enter = auto-generate instead)"
+                if ([string]::IsNullOrWhiteSpace($tokenInput)) {
+                    $tokenInput = New-StrongToken
+                    break
+                }
+            }
+            $token = $tokenInput
+        }
+        Write-Output "Token: $token"
+        Write-Output "Copy this into KUBUNDICTATE_TOKEN on every client's config.bat."
+
         $lines = @(
             "@echo off",
             "set KUBUNDICTATE_MODE=server",
             "set KUBUNDICTATE_PORT=$port",
-            "set KUBUNDICTATE_MODEL=$model"
+            "set KUBUNDICTATE_MODEL=$model",
+            "set KUBUNDICTATE_TOKEN=$token"
         )
         if (-not [string]::IsNullOrWhiteSpace($language)) {
             $lines += "set KUBUNDICTATE_LANGUAGE=$language"
@@ -93,7 +136,7 @@ if ($writeConfig) {
             $serverAddr = "${serverAddr}:50505"
         }
         $serverUrl = "http://$serverAddr"
-        $token = Read-Host "Shared token, if the server requires one (blank = none)"
+        $token = Read-Host "Shared token (ask whoever set up the server -- leave blank only if they told you it has none)"
 
         $lines = @(
             "@echo off",
