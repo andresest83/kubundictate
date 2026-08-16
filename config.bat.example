@@ -1,6 +1,9 @@
 @echo off
 REM Copy this file to config.bat (gitignored) and fill in the values for
 REM this machine. start.bat / start_hidden.bat call config.bat if present.
+REM For a client, this sets up the plain console client only -- for the
+REM tray client (start_tray.bat, no console window), skip this file
+REM entirely, it asks for its settings itself on first run.
 
 REM Required on every machine: "server" (the GPU box) or "client".
 set KUBUNDICTATE_MODE=client
