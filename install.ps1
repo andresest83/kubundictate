@@ -17,6 +17,30 @@ function Test-IsAdmin {
     ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Test-TokenStrength([string]$Token) {
+    $Token.Length -ge 8 -and $Token -cmatch '[A-Za-z]' -and $Token -cmatch '[0-9]' -and $Token -match '[^A-Za-z0-9]'
+}
+
+function New-StrongToken {
+    # Guarantees at least one letter, one digit, and one special character
+    # rather than relying on chance from a mixed charset.
+    $letters = [char[]]'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    $digits = [char[]]'23456789'
+    $specials = [char[]]'!@#%^*-_='
+    $all = $letters + $digits + $specials
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+
+    function Get-RandomChar($set) {
+        $b = New-Object byte[] 1
+        $rng.GetBytes($b)
+        $set[$b[0] % $set.Length]
+    }
+
+    $tokenChars = @((Get-RandomChar $letters), (Get-RandomChar $digits), (Get-RandomChar $specials))
+    1..21 | ForEach-Object { $tokenChars += Get-RandomChar $all }
+    -join ($tokenChars | Sort-Object { Get-Random })
+}
+
 Write-Output "=== KubunDictate installer ==="
 Write-Output ""
 
@@ -65,8 +89,24 @@ Write-Output ""
 # --- config.bat ---
 $writeConfig = $true
 if (Test-Path $configPath) {
-    $overwrite = Read-Host "config.bat already exists. Overwrite it? [y/N]"
-    $writeConfig = $overwrite.Trim().ToLower() -eq "y"
+    $existingModeMatch = Select-String -Path $configPath -Pattern 'KUBUNDICTATE_MODE=(\w+)' | Select-Object -First 1
+    $existingMode = if ($existingModeMatch) { $existingModeMatch.Matches[0].Groups[1].Value } else { $null }
+
+    if ($existingMode -and $existingMode -ne $mode) {
+        Write-Output ""
+        Write-Warning "This folder is currently configured as a $existingMode (config.bat has KUBUNDICTATE_MODE=$existingMode)."
+        if ($existingMode -eq "server") {
+            Write-Output "Want to dictate locally on this same box instead? You don't need to reconfigure it as a client -- run start_local_client.bat, which reuses this server's own settings (install.ps1's server path can set this up for you)."
+        }
+        $confirmSwitch = Read-Host "Continue and overwrite config.bat to make this box a $mode instead? [y/N]"
+        if ($confirmSwitch.Trim().ToLower() -ne "y") {
+            Write-Output "Leaving config.bat untouched."
+            exit 0
+        }
+    } else {
+        $overwrite = Read-Host "config.bat already exists. Overwrite it? [y/N]"
+        $writeConfig = $overwrite.Trim().ToLower() -eq "y"
+    }
 }
 
 if ($writeConfig) {
@@ -77,12 +117,41 @@ if ($writeConfig) {
         if ([string]::IsNullOrWhiteSpace($model)) { $model = "large-v3-turbo" }
         $language = Read-Host "Force language code, e.g. 'en' (blank = auto-detect)"
 
+        Write-Output ""
+        Write-Output "Without a shared token, anyone who can route to this server on your LAN can use it to transcribe."
+        $tokenInput = Read-Host "Shared token (Enter = auto-generate a strong one, type your own: 8+ chars with a letter, a number, and a special character, or 'skip' to leave it off)"
+        if ($tokenInput.Trim().ToLower() -eq "skip") {
+            $token = $null
+        } elseif ([string]::IsNullOrWhiteSpace($tokenInput)) {
+            $token = New-StrongToken
+        } else {
+            while (-not (Test-TokenStrength $tokenInput)) {
+                if ($tokenInput.Trim().ToLower() -eq "skip") { break }
+                $tokenInput = Read-Host "Needs 8+ characters with a letter, a number, and a special character (Enter = auto-generate, 'skip' to leave it off)"
+                if ([string]::IsNullOrWhiteSpace($tokenInput)) {
+                    $tokenInput = New-StrongToken
+                    break
+                }
+            }
+            $token = if ($tokenInput.Trim().ToLower() -eq "skip") { $null } else { $tokenInput }
+        }
+
+        if ($token) {
+            Write-Output "Token: $token"
+            Write-Output "Copy this into KUBUNDICTATE_TOKEN on every client's config.bat."
+        } else {
+            Write-Output "Skipping the shared token -- this server will accept requests from anyone who can reach it."
+        }
+
         $lines = @(
             "@echo off",
             "set KUBUNDICTATE_MODE=server",
             "set KUBUNDICTATE_PORT=$port",
             "set KUBUNDICTATE_MODEL=$model"
         )
+        if ($token) {
+            $lines += "set KUBUNDICTATE_TOKEN=$token"
+        }
         if (-not [string]::IsNullOrWhiteSpace($language)) {
             $lines += "set KUBUNDICTATE_LANGUAGE=$language"
         }
@@ -93,7 +162,7 @@ if ($writeConfig) {
             $serverAddr = "${serverAddr}:50505"
         }
         $serverUrl = "http://$serverAddr"
-        $token = Read-Host "Shared token, if the server requires one (blank = none)"
+        $token = Read-Host "Shared token (ask whoever set up the server -- leave blank only if they told you it has none)"
 
         $lines = @(
             "@echo off",
@@ -140,6 +209,19 @@ if ($mode -eq "server") {
     if ($registerAnswer.Trim().ToLower() -eq "y") {
         & (Join-Path $scriptDir "install_service.ps1")
         $serviceRegistered = $true
+    }
+    Write-Output ""
+
+    $localClientAnswer = Read-Host "Also dictate directly from this box (a local client hitting your own server at localhost)? [y/N]"
+    if ($localClientAnswer.Trim().ToLower() -eq "y") {
+        Write-Output "Installing client dependencies into this same venv..."
+        & $venvPython -m pip install -r (Join-Path $scriptDir "requirements-client.txt")
+        $localClientScript = Join-Path $scriptDir "start_local_client.bat"
+        if (Test-Path $localClientScript) {
+            Write-Output "Run start_local_client.bat on this box to dictate locally."
+        } else {
+            Write-Warning "start_local_client.bat not found next to this script -- expected it to ship with the repo."
+        }
     }
     Write-Output ""
 

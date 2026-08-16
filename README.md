@@ -142,10 +142,16 @@ Set these in `config.bat` (or the environment before running):
 - `KUBUNDICTATE_LANGUAGE` -- (server only) force a language code (e.g.
   `en`) to skip auto-detection and speed things up slightly. Default:
   auto-detect.
-- `KUBUNDICTATE_TOKEN` -- optional shared secret. If set on the server,
-  clients must send the same value or requests are rejected. Off by
-  default -- fine for a trusted LAN/Tailscale network, but recommended if
-  you're at all unsure who else is on it.
+- `KUBUNDICTATE_TOKEN` -- shared secret. If set on the server, clients
+  must send the same value or requests are rejected. Anyone who can
+  route to the server's port can otherwise use it to transcribe, so
+  `install.ps1` prompts for one on server setups: type your own (8+
+  chars, needs a letter, a number, and a special character), just hit
+  Enter to auto-generate a strong one, or type `skip` to leave it off.
+  If you set one, it's printed so you can copy it into each client's
+  `config.bat`. Skipping is a reasonable call if you're only reachable
+  over Tailscale and trust everyone on your tailnet -- riskier on an
+  open LAN.
 
 To change the hotkey, edit `HOTKEY` in `client.py` (uses
 [pynput](https://pynput.readthedocs.io/en/latest/keyboard.html#pynput.keyboard.Key) key names).
