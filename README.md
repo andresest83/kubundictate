@@ -15,6 +15,16 @@ It runs as two modes from the same codebase:
   the server, and copies the returned text to your clipboard. No GPU or
   model download required.
 
+## Status
+
+- **Windows client/server**: working. Server on the GPU box, thin
+  clients on any Windows PC on the LAN.
+- **Runs unattended at boot**: working, via a Windows Scheduled Task
+  (see "Run as a service" below) -- verified surviving a reboot with no
+  one logged in.
+- **Mac client**: planned, not started.
+- **Android client**: planned, not started.
+
 ## Setup
 
 Both modes share one venv and one entrypoint (`kubundictate.py`); which
@@ -70,6 +80,32 @@ which is the point).
 To run it automatically at login: press `Win+R`, type `shell:startup`,
 and drop a shortcut to `start_silent.vbs` in that folder. Not done for you
 automatically -- add it yourself if you want that behavior.
+
+## Run as a service (Windows startup, no login required)
+
+For the GPU box, `start_silent.vbs` at login only helps once someone's
+logged in. To have the server come up at boot -- before any login, and
+stay up across logout -- register it as a scheduled task instead:
+
+```
+install_service.ps1
+```
+
+Run from an **elevated** (Administrator) PowerShell. It registers a
+Scheduled Task named `KubunDictateServer` that runs `start_hidden.bat`
+at startup as `NT AUTHORITY\SYSTEM`, with automatic restart on failure.
+Requires `config.bat` in this folder to already have
+`KUBUNDICTATE_MODE=server` set.
+
+- Start it immediately without rebooting: `Start-ScheduledTask -TaskName KubunDictateServer`
+- Check status: `Get-ScheduledTask -TaskName KubunDictateServer`
+- Logs: same `kubundictate.log` as `start_hidden.bat`
+- Remove it: `uninstall_service.ps1` (also elevated)
+
+This uses Task Scheduler rather than a "real" Windows service (no new
+dependencies, reuses the existing hidden launcher) -- close enough for a
+single-user home GPU box. A `pywin32`-based service remains an option
+later if `services.msc` integration is ever actually needed.
 
 ## Configuration
 
@@ -142,6 +178,8 @@ VRAM-hungry, drop to `distil-large-v3` or `medium` via `KUBUNDICTATE_MODEL`.
 - `audio.py` -- shared WAV<->float32 conversion helpers
 - `venv/` -- self-contained Python virtual environment (not committed)
 - `start.bat` / `start_hidden.bat` / `start_silent.vbs` -- launchers
+- `install_service.ps1` / `uninstall_service.ps1` -- register/remove the
+  server as a Scheduled Task that runs at boot (see "Run as a service")
 - `config.bat.example` -- template for per-machine settings (copy to
   `config.bat`, which is gitignored)
 - `requirements-server.txt` / `requirements-client.txt` -- pip
