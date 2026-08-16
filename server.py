@@ -81,11 +81,46 @@ async def transcribe(audio: UploadFile, _auth=Depends(_check_auth)):
     return {"text": text, "elapsed": elapsed}
 
 
+def _lan_ip() -> str | None:
+    # UDP "connect" doesn't send packets; it just makes the OS pick the
+    # outbound-facing local IP via the routing table.
+    import socket
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
+def _tailscale_ip() -> str | None:
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=2
+        )
+        return result.stdout.strip() if result.returncode == 0 else None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+
 def main():
     global _model
     print(f"Loading model '{MODEL_SIZE}' on {DEVICE} ({COMPUTE_TYPE})...")
     _model = WhisperModel(MODEL_SIZE, device=DEVICE, compute_type=COMPUTE_TYPE)
     print(f"Model loaded. Serving on http://{HOST}:{PORT} (token auth: {'on' if TOKEN else 'off'})")
+
+    lan_ip = _lan_ip()
+    if lan_ip:
+        print(f"This is your Server IP: {lan_ip}")
+    tailscale_ip = _tailscale_ip()
+    if tailscale_ip:
+        print(f"This is your Tailscale IP: {tailscale_ip}")
+
     uvicorn.run(app, host=HOST, port=PORT)
 
 

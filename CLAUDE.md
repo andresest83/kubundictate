@@ -111,27 +111,30 @@ per issue:
   (not yet merged); merge #9 into that branch, then that branch into
   `main` via PR #1, to close out.
 - [#3](https://github.com/andresest83/kubundictate/issues/3) **Automate
-  the Windows Firewall inbound rule** (`priority: high`) -- default port
-  is now `50505` (private/dynamic range, chosen to avoid colliding with
-  common dev tooling on 8000/3000/5000/8080/etc., same reasoning
-  FluidVoice used for its own local API on 47733). What's still manual:
-  Windows' per-executable firewall prompt doesn't follow venv
-  `python.exe` copies (a different file from the base interpreter --
-  see #8), so switching between them can silently break LAN
-  connectivity. Automate rule provisioning as part of setup/service
-  registration.
+  the Windows Firewall inbound rule** (`priority: high`) -- **folded
+  into #4**, see below.
 - [#4](https://github.com/andresest83/kubundictate/issues/4) **One-shot
-  installer (winget or similar)** (`priority: high`) -- automate venv
-  creation, dependency install, port/firewall setup, and (once #2
-  lands) service registration, so a new machine goes from `git clone`
-  to running with one command instead of today's manual multi-step
-  setup.
+  installer** (`priority: high`) -- `install.ps1`: asks "server or
+  client?", then creates the venv, installs the right requirements
+  file, writes `config.bat`. Server path also provisions the firewall
+  rule (closes #3) and can register the startup service (`install_service.ps1`,
+  #2). Client path asks for the server's address and checks
+  reachability instead of hand-editing `config.bat` (closes #8 pieces
+  1-2 -- server prints its LAN/Tailscale IP at every startup via
+  `server.py`, installer surfaces the same at the end of server setup).
+  Mechanically a PowerShell bootstrap script, not winget -- winget needs
+  a compiled installer (e.g. Inno Setup) plus a release/manifest
+  pipeline on top of this; deliberately deferred as a fast-follow once
+  `install.ps1` is proven out, not built alongside it.
 - [#8](https://github.com/andresest83/kubundictate/issues/8) **Guided
   remote-client setup: endpoint discovery + Windows tray app**
-  (`priority: high`) -- server prints its LAN/Tailscale IP at startup,
-  client setup surfaces those instead of hand-editing `config.bat`,
-  client supports multiple saved endpoints, and ships as a tray app
-  instead of a console window. The client-facing payoff of #2/#3/#4.
+  (`priority: high`) -- pieces 1-2 (server announces its IP, client
+  setup asks for it) shipped via #4. Still open: client support for
+  multiple saved endpoints (piece 3), and shipping the client as a
+  tray app instead of a console window (piece 4) -- a real platform
+  change (new dependency for the tray icon, e.g. `pystray`, no-console
+  packaging, settings persistence) that needs its own design pass
+  before building.
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option

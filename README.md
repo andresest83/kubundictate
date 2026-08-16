@@ -27,8 +27,25 @@ It runs as two modes from the same codebase:
 
 ## Setup
 
+### Quick install
+
+After `git clone`, run `install.ps1` from this folder. It asks whether
+this machine is a server or a client, then creates the venv, installs
+the right dependencies, and writes `config.bat` for you. On the server
+it also provisions the Windows Firewall rule and can register the
+startup service; on the client it asks for the server's address and
+checks that it's reachable. Server setup needs an elevated
+(Administrator) PowerShell; client setup does not.
+
+Re-running it is safe -- it skips venv creation if one already exists
+and asks before overwriting an existing `config.bat`.
+
+### Manual setup
+
 Both modes share one venv and one entrypoint (`kubundictate.py`); which
 one runs is controlled by the `KUBUNDICTATE_MODE` environment variable.
+This is what `install.ps1` automates -- do it by hand if you'd rather
+not run the script, or need to fine-tune something it doesn't ask about.
 
 ```
 python -m venv venv
@@ -177,6 +194,8 @@ VRAM-hungry, drop to `distil-large-v3` or `medium` via `KUBUNDICTATE_MODEL`.
 - `client.py` -- hotkey/record/clipboard client
 - `audio.py` -- shared WAV<->float32 conversion helpers
 - `venv/` -- self-contained Python virtual environment (not committed)
+- `install.ps1` -- one-shot setup: venv, dependencies, `config.bat`,
+  firewall rule, and (optionally) the startup service (see "Quick install")
 - `start.bat` / `start_hidden.bat` / `start_silent.vbs` -- launchers
 - `install_service.ps1` / `uninstall_service.ps1` -- register/remove the
   server as a Scheduled Task that runs at boot (see "Run as a service")
