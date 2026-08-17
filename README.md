@@ -11,9 +11,9 @@ It runs as two modes from the same codebase:
   Whisper model and keeps it resident in VRAM, exposing a transcription
   endpoint over HTTP.
 - **client** -- runs on any Windows PC on your LAN (including the server
-  box itself). Handles the hotkey, records your mic, sends the audio to
-  the server, and copies the returned text to your clipboard. No GPU or
-  model download required.
+  box itself), as a system-tray icon. Handles the hotkey, records your
+  mic, sends the audio to the server, and copies the returned text to
+  your clipboard. No GPU or model download required.
 
 ## Status
 
@@ -30,15 +30,16 @@ It runs as two modes from the same codebase:
 ### Quick install
 
 After `git clone`, run `install.ps1` from this folder. It asks whether
-this machine is a server or a client, then creates the venv, installs
-the right dependencies, and writes `config.bat` for you. On the server
-it also provisions the Windows Firewall rule and can register the
-startup service; on the client it asks for the server's address and
-checks that it's reachable. Server setup needs an elevated
-(Administrator) PowerShell; client setup does not.
+this machine is a server or a client, then creates the venv and
+installs the right dependencies. On the server it also writes
+`config.bat`, provisions the Windows Firewall rule, and can register
+the startup service. On the client it installs the tray app's
+dependencies -- no `config.bat` needed, `start_tray.bat` asks for the
+server's address itself the first time it runs. Server setup needs an
+elevated (Administrator) PowerShell; client setup does not.
 
 Re-running it is safe -- it skips venv creation if one already exists
-and asks before overwriting an existing `config.bat`.
+and, on the server, asks before overwriting an existing `config.bat`.
 
 ### Manual setup
 
@@ -69,25 +70,40 @@ resident process serving requests on `KUBUNDICTATE_PORT` (default 50505).
 
 ### Client (any Windows PC, including the GPU box itself)
 
+Run `start_tray.bat` (no console window -- just an icon in the system
+tray). First run asks for the server's address (LAN IP or Tailscale IP)
+and, if the server has one, its shared token. Settings are saved to
+`%APPDATA%\KubunDictate\client_settings.json`, which remembers the
+last 3 servers you've used -- right-click the tray icon to switch
+between them or enter a new one.
+
+- Hold **F9** to record, release to transcribe. The text lands on the
+  clipboard automatically -- paste it with Ctrl+V anywhere.
+- The tray icon changes color while recording.
+- A short beep marks start/stop of recording, a higher beep marks a
+  successful transcription, and a low beep marks a failed request (e.g.
+  server unreachable).
+- Right-click the tray icon -> **Quit** to exit (there's no Esc-to-quit
+  here -- Esc is too easy to hit by accident in a background app).
+- Right-click -> **Run at startup** to toggle launching automatically at
+  login (adds/removes a `pythonw.exe start_tray.bat`-equivalent entry
+  under the current user's Registry Run key). Off by default -- launch
+  `start_tray.bat` manually otherwise.
+
+For a plain console client instead (no tray icon, `config.bat`-driven):
+
 ```
 set KUBUNDICTATE_MODE=client
 set KUBUNDICTATE_SERVER_URL=http://<server-ip>:50505
 ```
 
-Then run `start.bat`.
-
-- Hold **F9** to record, release to transcribe. The text lands on the
-  clipboard automatically -- paste it with Ctrl+V anywhere.
-- Press **Esc** (while not recording) to quit.
-- A short beep marks start/stop of recording, a higher beep marks a
-  successful transcription, and a low beep marks a failed request (e.g.
-  server unreachable) -- so you don't need to watch the console.
-
-If you want hotkey dictation directly on the GPU box too, run
-`start_local_client.bat` -- it reuses this box's own `config.bat`
-(port and token) and points itself at `localhost`. `install.ps1`'s
-server path offers to set this up (installs the small client
-dependencies into the same venv) right after server setup.
+Then run `start.bat`. Same hotkey/beep behavior as above, plus
+**Esc** (while not recording) to quit, since there's a console attached.
+This is also what `start_local_client.bat` uses for dictating directly
+on the GPU box -- it reuses this box's own `config.bat` (port and
+token) and points itself at `localhost`. `install.ps1`'s server path
+offers to set this up (installs the small client dependencies into the
+same venv) right after server setup.
 
 ## Run silently / at startup
 
@@ -128,13 +144,17 @@ later if `services.msc` integration is ever actually needed.
 
 ## Configuration
 
-Set these in `config.bat` (or the environment before running):
+The tray client (`start_tray.bat`) doesn't use `config.bat` at all --
+its server address/token are set through its own first-run prompt and
+tray menu, stored in `%APPDATA%\KubunDictate\client_settings.json`.
+These apply to the server and to the plain console client
+(`set X=Y` before `start.bat`, or in `config.bat`):
 
 - `KUBUNDICTATE_MODE` -- `server` or `client`. Required, no default.
-- `KUBUNDICTATE_SERVER_URL` -- (client only) the server's address, e.g.
-  `http://192.168.1.50:50505` on the LAN, or a
+- `KUBUNDICTATE_SERVER_URL` -- (console client only) the server's
+  address, e.g. `http://192.168.1.50:50505` on the LAN, or a
   [Tailscale](https://tailscale.com/) IP/hostname for off-LAN use.
-  Required for client mode.
+  Required for console client mode.
 - `KUBUNDICTATE_HOST` -- (server only) bind address. Default `0.0.0.0`.
 - `KUBUNDICTATE_PORT` -- (server only) port. Default `50505`.
 - `KUBUNDICTATE_MODEL` -- (server only) faster-whisper model size/name.
@@ -144,16 +164,16 @@ Set these in `config.bat` (or the environment before running):
 - `KUBUNDICTATE_LANGUAGE` -- (server only) force a language code (e.g.
   `en`) to skip auto-detection and speed things up slightly. Default:
   auto-detect.
-- `KUBUNDICTATE_TOKEN` -- shared secret. If set on the server, clients
-  must send the same value or requests are rejected. Anyone who can
-  route to the server's port can otherwise use it to transcribe, so
-  `install.ps1` prompts for one on server setups: type your own (8+
-  chars, needs a letter, a number, and a special character), just hit
-  Enter to auto-generate a strong one, or type `skip` to leave it off.
-  If you set one, it's printed so you can copy it into each client's
-  `config.bat`. Skipping is a reasonable call if you're only reachable
-  over Tailscale and trust everyone on your tailnet -- riskier on an
-  open LAN.
+- `KUBUNDICTATE_TOKEN` -- (server + console client) shared secret. If
+  set on the server, clients must send the same value or requests are
+  rejected. Anyone who can route to the server's port can otherwise use
+  it to transcribe, so `install.ps1` prompts for one on server setups:
+  type your own (8+ chars, needs a letter, a number, and a special
+  character), just hit Enter to auto-generate a strong one, or type
+  `skip` to leave it off. If you set one, it's printed so you can enter
+  it when a client (tray or console) asks for it. Skipping is a
+  reasonable call if you're only reachable over Tailscale and trust
+  everyone on your tailnet -- riskier on an open LAN.
 
 To change the hotkey, edit `HOTKEY` in `client.py` (uses
 [pynput](https://pynput.readthedocs.io/en/latest/keyboard.html#pynput.keyboard.Key) key names).
@@ -199,15 +219,22 @@ VRAM-hungry, drop to `distil-large-v3` or `medium` via `KUBUNDICTATE_MODEL`.
 - `kubundictate.py` -- entrypoint, dispatches to `server.py` or `client.py`
   based on `KUBUNDICTATE_MODE`
 - `server.py` -- FastAPI transcription server (GPU box)
-- `client.py` -- hotkey/record/clipboard client
+- `client.py` -- hotkey/record/clipboard engine, shared by the console
+  client and the tray client
+- `tray_client.py` -- system-tray client: same engine as `client.py`,
+  plus the tray icon/menu and the recent-servers settings file (see
+  "Client")
 - `audio.py` -- shared WAV<->float32 conversion helpers
 - `venv/` -- self-contained Python virtual environment (not committed)
-- `install.ps1` -- one-shot setup: venv, dependencies, `config.bat`,
-  firewall rule, and (optionally) the startup service (see "Quick install")
+- `install.ps1` -- one-shot setup: venv, dependencies, `config.bat`
+  (server only), firewall rule, and (optionally) the startup service
+  (see "Quick install")
 - `start.bat` / `start_hidden.bat` / `start_silent.vbs` -- launchers
-- `start_local_client.bat` -- launches a local client on the GPU box
-  itself, pointed at its own server on `localhost` (see "Server (the
-  GPU box)")
+- `start_tray.bat` -- launches the tray client (`pythonw.exe`, no
+  console window)
+- `start_local_client.bat` -- launches a plain console client on the
+  GPU box itself, pointed at its own server on `localhost` (see
+  "Server (the GPU box)")
 - `install_service.ps1` / `uninstall_service.ps1` -- register/remove the
   server as a Scheduled Task that runs at boot (see "Run as a service")
 - `config.bat.example` -- template for per-machine settings (copy to

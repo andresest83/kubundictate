@@ -86,31 +86,29 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Output ""
 
-# --- config.bat ---
-$writeConfig = $true
-if (Test-Path $configPath) {
-    $existingModeMatch = Select-String -Path $configPath -Pattern 'KUBUNDICTATE_MODE=(\w+)' | Select-Object -First 1
-    $existingMode = if ($existingModeMatch) { $existingModeMatch.Matches[0].Groups[1].Value } else { $null }
+# --- config.bat (server only -- the tray client keeps its own settings
+# under %APPDATA%\KubunDictate\, set up on first run of start_tray.bat) ---
+if ($mode -eq "server") {
+    $writeConfig = $true
+    if (Test-Path $configPath) {
+        $existingModeMatch = Select-String -Path $configPath -Pattern 'KUBUNDICTATE_MODE=(\w+)' | Select-Object -First 1
+        $existingMode = if ($existingModeMatch) { $existingModeMatch.Matches[0].Groups[1].Value } else { $null }
 
-    if ($existingMode -and $existingMode -ne $mode) {
-        Write-Output ""
-        Write-Warning "This folder is currently configured as a $existingMode (config.bat has KUBUNDICTATE_MODE=$existingMode)."
-        if ($existingMode -eq "server") {
-            Write-Output "Want to dictate locally on this same box instead? You don't need to reconfigure it as a client -- run start_local_client.bat, which reuses this server's own settings (install.ps1's server path can set this up for you)."
+        if ($existingMode -and $existingMode -ne $mode) {
+            Write-Output ""
+            Write-Warning "This folder is currently configured as a $existingMode (config.bat has KUBUNDICTATE_MODE=$existingMode)."
+            $confirmSwitch = Read-Host "Continue and overwrite config.bat to make this box a $mode instead? [y/N]"
+            if ($confirmSwitch.Trim().ToLower() -ne "y") {
+                Write-Output "Leaving config.bat untouched."
+                exit 0
+            }
+        } else {
+            $overwrite = Read-Host "config.bat already exists. Overwrite it? [y/N]"
+            $writeConfig = $overwrite.Trim().ToLower() -eq "y"
         }
-        $confirmSwitch = Read-Host "Continue and overwrite config.bat to make this box a $mode instead? [y/N]"
-        if ($confirmSwitch.Trim().ToLower() -ne "y") {
-            Write-Output "Leaving config.bat untouched."
-            exit 0
-        }
-    } else {
-        $overwrite = Read-Host "config.bat already exists. Overwrite it? [y/N]"
-        $writeConfig = $overwrite.Trim().ToLower() -eq "y"
     }
-}
 
-if ($writeConfig) {
-    if ($mode -eq "server") {
+    if ($writeConfig) {
         $port = Read-Host "Server port [50505]"
         if ([string]::IsNullOrWhiteSpace($port)) { $port = "50505" }
         $model = Read-Host "Whisper model [large-v3-turbo]"
@@ -138,7 +136,7 @@ if ($writeConfig) {
 
         if ($token) {
             Write-Output "Token: $token"
-            Write-Output "Copy this into KUBUNDICTATE_TOKEN on every client's config.bat."
+            Write-Output "Enter this token when each client (start_tray.bat) asks for one."
         } else {
             Write-Output "Skipping the shared token -- this server will accept requests from anyone who can reach it."
         }
@@ -156,42 +154,14 @@ if ($writeConfig) {
             $lines += "set KUBUNDICTATE_LANGUAGE=$language"
         }
         $lines | Set-Content -Path $configPath -Encoding ascii
+        Write-Output "Wrote $configPath"
     } else {
-        $serverAddr = Read-Host "Server address, e.g. 192.168.1.50:50505 or a Tailscale IP"
-        if ($serverAddr -notmatch ":\d+$") {
-            $serverAddr = "${serverAddr}:50505"
-        }
-        $serverUrl = "http://$serverAddr"
-        $token = Read-Host "Shared token (ask whoever set up the server -- leave blank only if they told you it has none)"
-
-        $lines = @(
-            "@echo off",
-            "set KUBUNDICTATE_MODE=client",
-            "set KUBUNDICTATE_SERVER_URL=$serverUrl"
-        )
-        if (-not [string]::IsNullOrWhiteSpace($token)) {
-            $lines += "set KUBUNDICTATE_TOKEN=$token"
-        }
-        $lines | Set-Content -Path $configPath -Encoding ascii
-
-        Write-Output ""
-        Write-Output "Checking $serverUrl/health ..."
-        try {
-            $resp = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 3 -UseBasicParsing
-            Write-Output "Reachable: $($resp.Content)"
-        } catch {
-            Write-Warning "Could not reach $serverUrl/health -- double check the address and that the server is running. The config is saved either way."
-        }
+        Write-Output "Keeping existing config.bat."
     }
-    Write-Output "Wrote $configPath"
-} else {
-    Write-Output "Keeping existing config.bat."
-}
-Write-Output ""
+    Write-Output ""
 
-# --- Server-only: firewall + service + IP summary ---
-$serviceRegistered = $false
-if ($mode -eq "server") {
+    # --- Firewall + service + local-client offer + IP summary ---
+    $serviceRegistered = $false
     $portForFirewall = if ($writeConfig) {
         $port
     } else {
@@ -238,12 +208,21 @@ if ($mode -eq "server") {
             Write-Output "  This is your Tailscale IP: $($tsIp.Trim())"
         }
     }
+} else {
+    Write-Output "Client dependencies installed (including the tray icon libraries)."
+    Write-Output "Run start_tray.bat to start dictating -- it asks for your server's LAN or"
+    Write-Output "Tailscale address (and its token, if it has one) the first time it runs, and"
+    Write-Output "remembers the last 3 you've used."
 }
 
 Write-Output ""
 Write-Output "=== Done ==="
-if ($serviceRegistered) {
-    Write-Output "Server is registered to start at boot. Start it now with: Start-ScheduledTask -TaskName KubunDictateServer"
+if ($mode -eq "server") {
+    if ($serviceRegistered) {
+        Write-Output "Server is registered to start at boot. Start it now with: Start-ScheduledTask -TaskName KubunDictateServer"
+    } else {
+        Write-Output "Run start.bat to start KubunDictate now."
+    }
 } else {
-    Write-Output "Run start.bat to start KubunDictate now."
+    Write-Output "Run start_tray.bat to start dictating."
 }
