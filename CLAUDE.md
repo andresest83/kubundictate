@@ -138,6 +138,24 @@ per issue:
   toggle (Registry Run key) that wasn't in the original issue text but
   came up during testing. User verified end-to-end including a full
   reboot with the startup toggle on.
+- [#15](https://github.com/andresest83/kubundictate/issues/15)
+  **Streamline server/client install and running** (`priority: high`)
+  -- too many entry-point scripts accumulated across #4/#8
+  (`start.bat`/`start_hidden.bat`/`start_local_client.bat`/`start_tray.bat`/
+  `install_service.ps1`). Goal: install and forget, one status command
+  each. Scoped: retire `start_local_client.bat` now that the tray
+  client can point itself at `localhost` (install it on the GPU box
+  too instead of a bespoke script), a one-command server status
+  helper, a deliberate call on whether the plain console client stays
+  as a manual/advanced path, README Files-list re-audit. Not yet
+  started.
+- [#16](https://github.com/andresest83/kubundictate/issues/16)
+  **Client feedback beyond clipboard + beep** (`priority: medium`) --
+  open design question, not yet scoped: does the client need a visual
+  surface (WisprFlow-style always-on-top popup showing the
+  transcription) beyond today's audio cues + tray icon color? Filed
+  separately from #15 so the cleanup work doesn't wait on this
+  open-ended one. Not yet started.
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option
