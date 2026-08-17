@@ -99,11 +99,12 @@ set KUBUNDICTATE_SERVER_URL=http://<server-ip>:50505
 
 Then run `start.bat`. Same hotkey/beep behavior as above, plus
 **Esc** (while not recording) to quit, since there's a console attached.
-This is also what `start_local_client.bat` uses for dictating directly
-on the GPU box -- it reuses this box's own `config.bat` (port and
-token) and points itself at `localhost`. `install.ps1`'s server path
-offers to set this up (installs the small client dependencies into the
-same venv) right after server setup.
+
+To dictate directly on the GPU box, just install the tray client there
+too and point it at `localhost` -- `install.ps1`'s server path offers
+to set this up right after server setup (installs the tray
+dependencies into the same venv and pre-fills
+`start_tray.bat`'s settings, so it needs zero setup on first launch).
 
 ## Run silently / at startup
 
@@ -133,7 +134,6 @@ Requires `config.bat` in this folder to already have
 `KUBUNDICTATE_MODE=server` set.
 
 - Start it immediately without rebooting: `Start-ScheduledTask -TaskName KubunDictateServer`
-- Check status: `Get-ScheduledTask -TaskName KubunDictateServer`
 - Logs: same `kubundictate.log` as `start_hidden.bat`
 - Remove it: `uninstall_service.ps1` (also elevated)
 
@@ -141,6 +141,17 @@ This uses Task Scheduler rather than a "real" Windows service (no new
 dependencies, reuses the existing hidden launcher) -- close enough for a
 single-user home GPU box. A `pywin32`-based service remains an option
 later if `services.msc` integration is ever actually needed.
+
+### Check status
+
+```
+status.ps1
+```
+
+No elevation needed -- run it from any PowerShell prompt on the server
+box. Reports whether the scheduled task is running and whether the
+server is actually answering requests (`/health`), in one summary
+instead of two separate things to remember.
 
 ## Configuration
 
@@ -232,11 +243,10 @@ VRAM-hungry, drop to `distil-large-v3` or `medium` via `KUBUNDICTATE_MODEL`.
 - `start.bat` / `start_hidden.bat` / `start_silent.vbs` -- launchers
 - `start_tray.bat` -- launches the tray client (`pythonw.exe`, no
   console window)
-- `start_local_client.bat` -- launches a plain console client on the
-  GPU box itself, pointed at its own server on `localhost` (see
-  "Server (the GPU box)")
 - `install_service.ps1` / `uninstall_service.ps1` -- register/remove the
   server as a Scheduled Task that runs at boot (see "Run as a service")
+- `status.ps1` -- one-command server status check: scheduled task state
+  + a live `/health` hit (see "Check status")
 - `config.bat.example` -- template for per-machine settings (copy to
   `config.bat`, which is gitignored)
 - `requirements-server.txt` / `requirements-client.txt` -- pip

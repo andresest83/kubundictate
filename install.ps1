@@ -184,14 +184,36 @@ if ($mode -eq "server") {
 
     $localClientAnswer = Read-Host "Also dictate directly from this box (a local client hitting your own server at localhost)? [y/N]"
     if ($localClientAnswer.Trim().ToLower() -eq "y") {
-        Write-Output "Installing client dependencies into this same venv..."
+        Write-Output "Installing client dependencies (including the tray icon libraries) into this same venv..."
         & $venvPython -m pip install -r (Join-Path $scriptDir "requirements-client.txt")
-        $localClientScript = Join-Path $scriptDir "start_local_client.bat"
-        if (Test-Path $localClientScript) {
-            Write-Output "Run start_local_client.bat on this box to dictate locally."
-        } else {
-            Write-Warning "start_local_client.bat not found next to this script -- expected it to ship with the repo."
+
+        # Pre-seed the tray client's own settings file so start_tray.bat needs
+        # zero setup on this box -- same {"recent": [{url, token}, ...]} shape
+        # tray_client.py's save_recent() writes, so it just picks this up.
+        $tokenMatch = Select-String -Path $configPath -Pattern 'KUBUNDICTATE_TOKEN=(.+)$' | Select-Object -First 1
+        $tokenForSeed = if ($tokenMatch) { $tokenMatch.Matches[0].Groups[1].Value.Trim() } else { $null }
+        $localhostUrl = "http://localhost:$portForFirewall"
+
+        $settingsDir = Join-Path $env:APPDATA "KubunDictate"
+        $settingsPath = Join-Path $settingsDir "client_settings.json"
+        $recent = @()
+        if (Test-Path $settingsPath) {
+            try {
+                $existing = Get-Content $settingsPath -Raw | ConvertFrom-Json
+                if ($existing.recent) { $recent = @($existing.recent) }
+            } catch {
+                $recent = @()
+            }
         }
+        $recent = @($recent | Where-Object { $_.url -ne $localhostUrl })
+        $recent = @(@{ url = $localhostUrl; token = $tokenForSeed }) + $recent
+        if ($recent.Count -gt 3) { $recent = $recent[0..2] }
+
+        New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
+        $json = (@{ recent = $recent } | ConvertTo-Json -Depth 5)
+        [System.IO.File]::WriteAllText($settingsPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+
+        Write-Output "start_tray.bat is ready to go on this box -- pointed at $localhostUrl, no setup needed."
     }
     Write-Output ""
 
