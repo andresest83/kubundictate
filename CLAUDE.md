@@ -128,13 +128,16 @@ per issue:
   `install.ps1` is proven out, not built alongside it.
 - [#8](https://github.com/andresest83/kubundictate/issues/8) **Guided
   remote-client setup: endpoint discovery + Windows tray app**
-  (`priority: high`) -- pieces 1-2 (server announces its IP, client
-  setup asks for it) shipped via #4. Still open: client support for
-  multiple saved endpoints (piece 3), and shipping the client as a
-  tray app instead of a console window (piece 4) -- a real platform
-  change (new dependency for the tray icon, e.g. `pystray`, no-console
-  packaging, settings persistence) that needs its own design pass
-  before building.
+  (`priority: high`) -- **implemented and verified 2026-08-17** via
+  `tray_client.py` (PR [#13](https://github.com/andresest83/kubundictate/pull/13)).
+  Pieces 1-2 shipped earlier via #4. Piece 3 built as a lightweight
+  3-entry recent-servers MRU (not full named-endpoint management --
+  wasn't needed). Piece 4: `pystray` tray icon (color-coded while
+  recording), settings in `%APPDATA%\KubunDictate\client_settings.json`
+  (separate from the server's `config.bat`), plus a **Run at startup**
+  toggle (Registry Run key) that wasn't in the original issue text but
+  came up during testing. User verified end-to-end including a full
+  reboot with the startup toggle on.
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option
