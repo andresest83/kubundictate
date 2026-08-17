@@ -85,6 +85,10 @@ between them or enter a new one.
   server unreachable).
 - Right-click the tray icon -> **Quit** to exit (there's no Esc-to-quit
   here -- Esc is too easy to hit by accident in a background app).
+- Right-click -> **Run at startup** to toggle launching automatically at
+  login (adds/removes a `pythonw.exe start_tray.bat`-equivalent entry
+  under the current user's Registry Run key). Off by default -- launch
+  `start_tray.bat` manually otherwise.
 
 For a plain console client instead (no tray icon, `config.bat`-driven):
 

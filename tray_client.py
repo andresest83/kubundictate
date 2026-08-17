@@ -12,9 +12,11 @@ no console window).
 import json
 import os
 import re
+import sys
 import threading
 import time
 import tkinter as tk
+import winreg
 from pathlib import Path
 from tkinter import simpledialog
 
@@ -29,6 +31,38 @@ RECORD_COLOR = (235, 77, 75, 255)
 
 SETTINGS_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "KubunDictate"
 SETTINGS_PATH = SETTINGS_DIR / "client_settings.json"
+
+STARTUP_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+STARTUP_NAME = "KubunDictate"
+
+
+def _startup_command():
+    # Always the no-console pythonw.exe, regardless of which interpreter
+    # launched this process (testing via python.exe shouldn't register a
+    # console-window startup entry).
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    script = Path(__file__).resolve()
+    return f'"{pythonw}" "{script}"'
+
+
+def is_startup_enabled():
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_KEY) as key:
+            value, _ = winreg.QueryValueEx(key, STARTUP_NAME)
+    except FileNotFoundError:
+        return False
+    return value == _startup_command()
+
+
+def set_startup_enabled(enabled):
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_KEY, 0, winreg.KEY_SET_VALUE) as key:
+        if enabled:
+            winreg.SetValueEx(key, STARTUP_NAME, 0, winreg.REG_SZ, _startup_command())
+        else:
+            try:
+                winreg.DeleteValue(key, STARTUP_NAME)
+            except FileNotFoundError:
+                pass
 
 
 def load_recent():
@@ -147,6 +181,11 @@ class TrayApp:
 
         items.append(pystray.MenuItem("Enter new server...", self._on_new_server))
         items.append(pystray.Menu.SEPARATOR)
+        items.append(
+            pystray.MenuItem(
+                "Run at startup", self._on_toggle_startup, checked=lambda item: is_startup_enabled()
+            )
+        )
         items.append(pystray.MenuItem("Quit", self._on_quit))
         return pystray.Menu(*items)
 
@@ -175,6 +214,9 @@ class TrayApp:
         self._apply_active()
         self._refresh_menu()
 
+    def _on_toggle_startup(self, icon, item):
+        set_startup_enabled(not is_startup_enabled())
+
     def _on_quit(self, icon, item):
         self.stop_event.set()
         icon.stop()
@@ -185,11 +227,7 @@ class TrayApp:
         # always-visible from the app side, so nudge the user to it once.
         icon.visible = True
         if self._first_run:
-            icon.notify(
-                "Look for the KubunDictate icon near the clock -- click the "
-                "^ arrow to find hidden icons, then drag it out to always show.",
-                "KubunDictate is running",
-            )
+            icon.notify("Running in the system tray -- look for it near the clock.", "KubunDictate")
 
     def run(self):
         self._first_run = not self.recent
