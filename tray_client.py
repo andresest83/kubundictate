@@ -179,8 +179,21 @@ class TrayApp:
         self.stop_event.set()
         icon.stop()
 
+    def _on_ready(self, icon):
+        # Windows hides newly-seen tray icons behind the "^" overflow
+        # chevron by default -- there's no supported way to force
+        # always-visible from the app side, so nudge the user to it once.
+        icon.visible = True
+        if self._first_run:
+            icon.notify(
+                "Look for the KubunDictate icon near the clock -- click the "
+                "^ arrow to find hidden icons, then drag it out to always show.",
+                "KubunDictate is running",
+            )
+
     def run(self):
-        if not self.recent:
+        self._first_run = not self.recent
+        if self._first_run:
             result = self._prompt_for_server()
             if not result:
                 return
@@ -197,7 +210,7 @@ class TrayApp:
             target=_watch_recording, args=(self.icon, self.stop_event), daemon=True
         ).start()
 
-        self.icon.run()
+        self.icon.run(setup=self._on_ready)
 
 
 def main():
