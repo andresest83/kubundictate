@@ -1,23 +1,17 @@
 @echo off
 REM Copy this file to config.bat (gitignored) and fill in the values for
-REM this machine. start.bat / start_hidden.bat call config.bat if present.
-REM For a client, this sets up the plain console client only -- for the
-REM tray client (start_tray.bat, no console window), skip this file
-REM entirely, it asks for its settings itself on first run.
+REM the server. start_server.bat / start_server_hidden.bat call config.bat
+REM if present. This is server-only -- the tray client (start_tray.bat)
+REM keeps its own settings under %APPDATA%\KubunDictate\, set up on first
+REM run, not through this file.
 
-REM Required on every machine: "server" (the GPU box) or "client".
-set KUBUNDICTATE_MODE=client
-
-REM --- Server settings (only used when KUBUNDICTATE_MODE=server) ---
-REM set KUBUNDICTATE_HOST=0.0.0.0
-REM set KUBUNDICTATE_PORT=50505
-REM set KUBUNDICTATE_MODEL=large-v3-turbo
+set KUBUNDICTATE_HOST=0.0.0.0
+set KUBUNDICTATE_PORT=50505
+set KUBUNDICTATE_MODEL=large-v3-turbo
 REM set KUBUNDICTATE_LANGUAGE=en
 
-REM --- Client settings (only used when KUBUNDICTATE_MODE=client) ---
-REM Point this at the server: LAN IP for same-network use, or a Tailscale
-REM IP/hostname (100.x.x.x) for off-LAN use.
-set KUBUNDICTATE_SERVER_URL=http://192.168.1.50:50505
-
-REM --- Optional shared secret (set the same value on server + client) ---
+REM Optional shared secret -- restricts who can use this server. Must use
+REM only letters, digits, and -_.~+ (config.bat is parsed by cmd.exe,
+REM which mangles other special characters). Enter the same value into
+REM each client's tray icon (Enter new server...).
 REM set KUBUNDICTATE_TOKEN=change-me

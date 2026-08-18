@@ -241,7 +241,7 @@ class TrayApp:
         self._refresh_menu()
 
         threading.Thread(
-            target=lambda: client.run(self.stop_event, quit_on_esc=False),
+            target=lambda: client.run(self.stop_event),
             daemon=True,
         ).start()
         threading.Thread(
