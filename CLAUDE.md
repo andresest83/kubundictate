@@ -33,10 +33,14 @@ Status:
    mode-dispatched one (that `kubundictate.py`/`KUBUNDICTATE_MODE`
    layer was retired in #21 once the plain console client it served
    was fully superseded by the tray client). See README.md for details.
-2. **Mac client** -- next. A `client.py`-equivalent for macOS: same
-   HTTP contract against `server.py`, different hotkey/audio-capture
-   libraries where `pynput`/`sounddevice` don't behave the same on macOS.
-   Not yet scoped in detail -- plan before coding.
+2. **Mac client** -- next, filed as
+   [#24](https://github.com/andresest83/kubundictate/issues/24).
+   Concrete motivation: the user's wife wants to use it occasionally
+   from her Mac. Same HTTP contract against `server.py`, different
+   hotkey/audio-capture libraries and explicit macOS permission
+   prompts (Input Monitoring, Microphone) where `pynput`/`sounddevice`
+   don't behave the same as on Windows. Not yet scoped in detail --
+   plan before coding.
 3. **Android client** -- later; not yet scoped.
 
 Architecture that's now in place and should be preserved by future
@@ -194,6 +198,16 @@ per issue:
   convenience from #15 (dropped in favor of "run both installers on
   that box"). User verified the full flow end-to-end on the real GPU
   box and client machine.
+- [#24](https://github.com/andresest83/kubundictate/issues/24) **Mac
+  client** (`priority: high`) -- concrete motivation: user's wife wants
+  to use it occasionally from her Mac. Menu-bar equivalent of
+  `tray_client.py`. Not scoped: macOS permission-prompt UX (Input
+  Monitoring, Microphone), whether `pystray` is solid enough on macOS
+  or `rumps` is needed instead, and whether it needs real `.app`
+  packaging given the target user isn't comfortable with Terminal.
+  Her exact macOS version/chip (Apple Silicon vs Intel) still TBD --
+  not blocking the issue, needed before/during implementation. Needs
+  its own design pass before coding, same as #8.
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option
