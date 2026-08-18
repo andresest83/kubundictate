@@ -48,6 +48,15 @@ def _beep(freq, duration_ms):
         import winsound
 
         winsound.Beep(freq, duration_ms)
+        return
+    except ImportError:
+        pass  # not on Windows -- fall through to the sounddevice tone below
+
+    try:
+        t = np.linspace(0, duration_ms / 1000, int(SAMPLE_RATE * duration_ms / 1000), endpoint=False)
+        tone = (0.3 * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+        sd.play(tone, SAMPLE_RATE)
+        sd.wait()
     except Exception:
         pass
 
