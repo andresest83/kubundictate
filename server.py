@@ -1,7 +1,8 @@
 """Transcription server: loads faster-whisper once, serves it over HTTP.
 
-Run via `kubundictate.py` with KUBUNDICTATE_MODE=server (see README.md for
-configuration). Keeps the model resident in VRAM between requests.
+Entrypoint -- run directly via start_server.bat/start_server_hidden.bat
+(see README.md for configuration). Keeps the model resident in VRAM
+between requests.
 """
 
 import os

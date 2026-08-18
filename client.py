@@ -1,13 +1,12 @@
-"""Push-to-talk client: records locally, transcribes via a remote server.
+"""Push-to-talk record/transcribe engine, used by tray_client.py.
 
-Hold the hotkey, speak, release it, and the transcription (fetched from
-KUBUNDICTATE_SERVER_URL) lands on the clipboard ready to paste (Ctrl+V).
-Run via `kubundictate.py` with KUBUNDICTATE_MODE=client (see README.md).
+Hold the hotkey, speak, release it, and the transcription lands on the
+clipboard ready to paste (Ctrl+V). Not a standalone entrypoint --
+imported by tray_client.py, which owns the stop_event passed to run().
 """
 
 import os
 import queue
-import threading
 
 import numpy as np
 import requests
@@ -117,12 +116,11 @@ def stop_recording_and_transcribe():
         print("[no speech detected]")
 
 
-def run(stop_event, quit_on_esc=True):
+def run(stop_event):
     """Runs the record/transcribe hotkey loop until stop_event is set.
 
-    Shared by the plain console client (main(), below) and the tray
-    client, which owns stop_event itself so its Quit menu item can stop
-    this cleanly from another thread.
+    Owned by tray_client.py, which runs this in a background thread and
+    sets stop_event from its Quit menu item to stop it cleanly.
     """
     if not settings.server_url:
         raise SystemExit(
@@ -132,8 +130,6 @@ def run(stop_event, quit_on_esc=True):
 
     print(f"Server: {settings.server_url} (token auth: {'on' if settings.token else 'off'})")
     print("Hold F9 to talk, release to transcribe + copy to clipboard.")
-    if quit_on_esc:
-        print("Press Esc (while not recording) to quit.")
 
     stream = sd.InputStream(
         samplerate=SAMPLE_RATE,
@@ -150,9 +146,6 @@ def run(stop_event, quit_on_esc=True):
     def on_release(key):
         if key == HOTKEY and _recording:
             stop_recording_and_transcribe()
-        elif quit_on_esc and key == keyboard.Key.esc and not _recording:
-            stop_event.set()
-            return False
 
     listener = keyboard.Listener(on_press=on_press, on_release=on_release)
     listener.start()
@@ -166,11 +159,3 @@ def run(stop_event, quit_on_esc=True):
         stream.stop()
         stream.close()
         print("Goodbye.")
-
-
-def main():
-    run(threading.Event())
-
-
-if __name__ == "__main__":
-    main()

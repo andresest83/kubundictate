@@ -25,10 +25,14 @@ via Tailscale -- starting with Windows.
 
 Status:
 
-1. **Windows** -- done. `server.py` (FastAPI + Uvicorn, GPU box) and
-   `client.py` (hotkey/record/clipboard, any Windows PC) split out of the
-   original single-file script, wired together via `kubundictate.py` and
-   `KUBUNDICTATE_MODE`. See README.md for details.
+1. **Windows** -- done. `server.py` (FastAPI + Uvicorn, GPU box,
+   direct entrypoint) and `tray_client.py` (system-tray client, any
+   Windows PC, uses `client.py`'s engine) split out of the original
+   single-file script -- two independent entrypoints/installers per
+   role (`install_server.ps1`/`install_client.ps1`), not a shared
+   mode-dispatched one (that `kubundictate.py`/`KUBUNDICTATE_MODE`
+   layer was retired in #21 once the plain console client it served
+   was fully superseded by the tray client). See README.md for details.
 2. **Mac client** -- next. A `client.py`-equivalent for macOS: same
    HTTP contract against `server.py`, different hotkey/audio-capture
    libraries where `pynput`/`sounddevice` don't behave the same on macOS.
@@ -172,6 +176,22 @@ per issue:
   scoped: shorter tokens, QR pairing, or leaning on LAN auto-discover
   (mentioned in #8's discussion, not yet its own issue) for a
   confirm-a-short-code pairing flow instead of copy-typing.
+- [#21](https://github.com/andresest83/kubundictate/issues/21)
+  **Reorganize repo: per-role installers, retire dead entry points**
+  (`priority: medium`) -- **in progress** on `feature/21-repo-restructure`,
+  not yet merged. `install.ps1` (asks server/client) split into
+  `install_server.ps1`/`install_client.ps1`; `start.bat`/`start_hidden.bat`
+  renamed `start_server.bat`/`start_server_hidden.bat` and now invoke
+  `server.py` directly instead of via `kubundictate.py`;
+  `install_service.ps1`/`uninstall_service.ps1`/`status.ps1` renamed
+  with a `server` in the name for consistency. Retired: the plain
+  console client (`client.py`'s env-var/`config.bat` path -- fully
+  superseded by the tray client, #8), `kubundictate.py` (mode
+  dispatcher with nothing left to dispatch once the console client was
+  gone), `start_silent.vbs` (superseded by the Scheduled Task
+  approach), and `install_server.ps1`'s local-client pre-seeding
+  convenience from #15 (dropped in favor of "run both installers on
+  that box").
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option
