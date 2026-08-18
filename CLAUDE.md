@@ -178,8 +178,9 @@ per issue:
   confirm-a-short-code pairing flow instead of copy-typing.
 - [#21](https://github.com/andresest83/kubundictate/issues/21)
   **Reorganize repo: per-role installers, retire dead entry points**
-  (`priority: medium`) -- **in progress** on `feature/21-repo-restructure`,
-  not yet merged. `install.ps1` (asks server/client) split into
+  (`priority: medium`) -- **implemented and verified 2026-08-18** via
+  PR [#22](https://github.com/andresest83/kubundictate/pull/22).
+  `install.ps1` (asks server/client) split into
   `install_server.ps1`/`install_client.ps1`; `start.bat`/`start_hidden.bat`
   renamed `start_server.bat`/`start_server_hidden.bat` and now invoke
   `server.py` directly instead of via `kubundictate.py`;
@@ -191,7 +192,8 @@ per issue:
   gone), `start_silent.vbs` (superseded by the Scheduled Task
   approach), and `install_server.ps1`'s local-client pre-seeding
   convenience from #15 (dropped in favor of "run both installers on
-  that box").
+  that box"). User verified the full flow end-to-end on the real GPU
+  box and client machine.
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option
