@@ -36,11 +36,13 @@ Status:
 2. **Mac client** -- next, filed as
    [#24](https://github.com/andresest83/kubundictate/issues/24).
    Concrete motivation: the user's wife wants to use it occasionally
-   from her Mac. Same HTTP contract against `server.py`, different
-   hotkey/audio-capture libraries and explicit macOS permission
-   prompts (Input Monitoring, Microphone) where `pynput`/`sounddevice`
-   don't behave the same as on Windows. Not yet scoped in detail --
-   plan before coding.
+   from her Mac. Target machine confirmed: macOS 26.5.2 (Tahoe), Apple
+   M3 Max (Apple Silicon/arm64) -- modern OS + chip, no Intel/Rosetta
+   fallback needed for the initial build. Same HTTP contract against
+   `server.py`, different hotkey/audio-capture libraries and explicit
+   macOS permission prompts (Input Monitoring, Microphone) where
+   `pynput`/`sounddevice` don't behave the same as on Windows. Not yet
+   scoped in detail -- plan before coding.
 3. **Android client** -- later; not yet scoped.
 
 Architecture that's now in place and should be preserved by future
@@ -200,14 +202,13 @@ per issue:
   box and client machine.
 - [#24](https://github.com/andresest83/kubundictate/issues/24) **Mac
   client** (`priority: high`) -- concrete motivation: user's wife wants
-  to use it occasionally from her Mac. Menu-bar equivalent of
-  `tray_client.py`. Not scoped: macOS permission-prompt UX (Input
-  Monitoring, Microphone), whether `pystray` is solid enough on macOS
-  or `rumps` is needed instead, and whether it needs real `.app`
-  packaging given the target user isn't comfortable with Terminal.
-  Her exact macOS version/chip (Apple Silicon vs Intel) still TBD --
-  not blocking the issue, needed before/during implementation. Needs
-  its own design pass before coding, same as #8.
+  to use it occasionally from her Mac. Target machine confirmed: macOS
+  26.5.2 (Tahoe), Apple M3 Max (Apple Silicon/arm64). Menu-bar
+  equivalent of `tray_client.py`. Not scoped: macOS permission-prompt
+  UX (Input Monitoring, Microphone), whether `pystray` is solid enough
+  on macOS or `rumps` is needed instead, and whether it needs real
+  `.app` packaging given the target user isn't comfortable with
+  Terminal. Needs its own design pass before coding, same as #8.
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option

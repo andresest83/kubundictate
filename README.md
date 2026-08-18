@@ -23,7 +23,8 @@ Two independent roles, each with its own installer:
 - **Runs unattended at boot**: working, via a Windows Scheduled Task
   (see "Run as a service" below) -- verified surviving a reboot with no
   one logged in.
-- **Mac client**: planned, not started.
+- **Mac client**: planned, not started -- see
+  [issue #24](https://github.com/andresest83/kubundictate/issues/24).
 - **Android client**: planned, not started.
 
 ## Setup
