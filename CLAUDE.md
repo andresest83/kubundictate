@@ -140,20 +140,24 @@ per issue:
   reboot with the startup toggle on.
 - [#15](https://github.com/andresest83/kubundictate/issues/15)
   **Streamline server/client install and running** (`priority: high`)
-  -- **in progress** on `feature/15-streamline-scripts`, not yet
-  merged. Shipped so far: `start_local_client.bat` retired (the tray
-  client points itself at `localhost` instead, pre-seeded by
-  `install.ps1`), new `status.ps1` (one command, no elevation, task
-  state + `/health`). Two real bugs found through hands-on testing and
-  fixed along the way: `status.ps1` gave a false "not registered" for
-  the SYSTEM-owned task when queried non-elevated (`Get-ScheduledTask`
-  silently omits what it can't read; `schtasks`'s distinct "Access is
-  denied" vs. "cannot find" wording now disambiguates); and the shared
-  token's charset included `%`/`^`, which `cmd.exe` silently strips
-  when `config.bat` is `call`ed -- desynced the server's real token
-  from every client for as long as the box had been up. That second
-  bug also prompted flipping the token to opt-in by default (was
-  technically-optional-but-on-by-default) -- see #18.
+  -- **implemented and verified 2026-08-18** via PR
+  [#19](https://github.com/andresest83/kubundictate/pull/19).
+  `start_local_client.bat` retired (the tray client points itself at
+  `localhost` instead, pre-seeded by `install.ps1`), new `status.ps1`
+  (one command, no elevation, task state + `/health`), `start_tray.bat`
+  now detaches instead of blocking the calling terminal. Three real
+  bugs found through hands-on testing and fixed along the way:
+  `status.ps1` gave a false "not registered" for the SYSTEM-owned task
+  when queried non-elevated (`Get-ScheduledTask` silently omits what
+  it can't read; `schtasks`'s distinct "Access is denied" vs. "cannot
+  find" wording now disambiguates); the shared token's charset included
+  `%`/`^`, which `cmd.exe` silently strips when `config.bat` is
+  `call`ed -- desynced the server's real token from every client for
+  as long as the box had been up (also prompted flipping the token to
+  opt-in by default -- see #18); and `start_tray.bat` invoking
+  `pythonw.exe` directly (rather than via `start`) made the calling
+  terminal block until the tray app was quit. Verified end-to-end on
+  the GPU box and reconnected the remote client after the token fix.
 - [#16](https://github.com/andresest83/kubundictate/issues/16)
   **Client feedback beyond clipboard + beep** (`priority: medium`) --
   open design question, not yet scoped: does the client need a visual
