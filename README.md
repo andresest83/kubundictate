@@ -177,14 +177,19 @@ These apply to the server and to the plain console client
   auto-detect.
 - `KUBUNDICTATE_TOKEN` -- (server + console client) shared secret. If
   set on the server, clients must send the same value or requests are
-  rejected. Anyone who can route to the server's port can otherwise use
-  it to transcribe, so `install.ps1` prompts for one on server setups:
-  type your own (8+ chars, needs a letter, a number, and a special
-  character), just hit Enter to auto-generate a strong one, or type
-  `skip` to leave it off. If you set one, it's printed so you can enter
-  it when a client (tray or console) asks for it. Skipping is a
-  reasonable call if you're only reachable over Tailscale and trust
-  everyone on your tailnet -- riskier on an open LAN.
+  rejected. Optional, **off by default** -- `install.ps1` prompts on
+  server setups: Enter for none, `generate` for a strong random one, or
+  type your own (8+ chars, needs a letter, a number, and one of
+  `-_.~+`). That character set is deliberately narrow: `config.bat` is
+  `call`ed by `cmd.exe`, which treats `%` and `^` (among others) as
+  special and silently corrupts them, desyncing the server's real token
+  from what clients were told -- happened once, not fun to debug, so
+  the generator and the strength check both stick to characters that
+  are inert in a batch file. If you do set one, it's printed prominently
+  (and saved to `server-token.txt`, gitignored) so you can enter it into
+  each client's tray icon (right-click -> Enter new server...). Worth
+  setting if you're not sure who else is on your LAN; a trusted home
+  network or Tailscale-only setup is a reasonable case to leave it off.
 
 To change the hotkey, edit `HOTKEY` in `client.py` (uses
 [pynput](https://pynput.readthedocs.io/en/latest/keyboard.html#pynput.keyboard.Key) key names).

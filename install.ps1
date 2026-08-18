@@ -18,15 +18,24 @@ function Test-IsAdmin {
 }
 
 function Test-TokenStrength([string]$Token) {
-    $Token.Length -ge 8 -and $Token -cmatch '[A-Za-z]' -and $Token -cmatch '[0-9]' -and $Token -match '[^A-Za-z0-9]'
+    # Special-character class is deliberately restricted to characters that
+    # are inert in a .bat file's `set VAR=value` line -- config.bat is
+    # `call`ed by cmd.exe (start.bat/start_hidden.bat), which parses %...%
+    # as variable expansion and ^ as its escape character, silently
+    # corrupting anything outside this safe set (confirmed: a generated
+    # token with ^ and % came out of `call config.bat` with both characters
+    # stripped, desyncing the server's actual token from what every client
+    # was told to use).
+    $Token.Length -ge 8 -and $Token -cmatch '[A-Za-z]' -and $Token -cmatch '[0-9]' -and $Token -match '[-_.~+]'
 }
 
 function New-StrongToken {
     # Guarantees at least one letter, one digit, and one special character
-    # rather than relying on chance from a mixed charset.
+    # rather than relying on chance from a mixed charset. Special charset
+    # matches Test-TokenStrength's batch-safe set.
     $letters = [char[]]'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
     $digits = [char[]]'23456789'
-    $specials = [char[]]'!@#%^*-_='
+    $specials = [char[]]'-_.~+'
     $all = $letters + $digits + $specials
     $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
 
@@ -116,29 +125,38 @@ if ($mode -eq "server") {
         $language = Read-Host "Force language code, e.g. 'en' (blank = auto-detect)"
 
         Write-Output ""
-        Write-Output "Without a shared token, anyone who can route to this server on your LAN can use it to transcribe."
-        $tokenInput = Read-Host "Shared token (Enter = auto-generate a strong one, type your own: 8+ chars with a letter, a number, and a special character, or 'skip' to leave it off)"
-        if ($tokenInput.Trim().ToLower() -eq "skip") {
+        Write-Output "A shared token restricts who can use this server -- optional, off by default. Worth setting if you're not sure who else is on your LAN; skip it for a trusted home network."
+        $tokenInput = Read-Host "Shared token (Enter = none, 'generate' for a strong random one, or type your own: 8+ chars with a letter, a number, and one of -_.~+)"
+        if ([string]::IsNullOrWhiteSpace($tokenInput)) {
             $token = $null
-        } elseif ([string]::IsNullOrWhiteSpace($tokenInput)) {
+        } elseif ($tokenInput.Trim().ToLower() -eq "generate") {
             $token = New-StrongToken
         } else {
             while (-not (Test-TokenStrength $tokenInput)) {
-                if ($tokenInput.Trim().ToLower() -eq "skip") { break }
-                $tokenInput = Read-Host "Needs 8+ characters with a letter, a number, and a special character (Enter = auto-generate, 'skip' to leave it off)"
-                if ([string]::IsNullOrWhiteSpace($tokenInput)) {
+                if ([string]::IsNullOrWhiteSpace($tokenInput)) { break }
+                $tokenInput = Read-Host "Needs 8+ characters with a letter, a number, and one of -_.~+ (Enter = give up and use no token, 'generate' for a strong random one)"
+                if ([string]::IsNullOrWhiteSpace($tokenInput)) { break }
+                if ($tokenInput.Trim().ToLower() -eq "generate") {
                     $tokenInput = New-StrongToken
                     break
                 }
             }
-            $token = if ($tokenInput.Trim().ToLower() -eq "skip") { $null } else { $tokenInput }
+            $token = if ([string]::IsNullOrWhiteSpace($tokenInput)) { $null } else { $tokenInput }
         }
 
         if ($token) {
-            Write-Output "Token: $token"
-            Write-Output "Enter this token when each client (start_tray.bat) asks for one."
+            $tokenFile = Join-Path $scriptDir "server-token.txt"
+            "KubunDictate server token, generated $(Get-Date -Format 'yyyy-MM-dd HH:mm')`n$token`n`nEnter this into every client's tray icon (right-click -> Enter new server...) when it asks for a token." |
+                Set-Content -Path $tokenFile -Encoding utf8
+            Write-Output ""
+            Write-Output "===================================================================="
+            Write-Output "  TOKEN: $token"
+            Write-Output "  Saved to: $tokenFile"
+            Write-Output "  Enter this into every client's tray icon (Enter new server...)."
+            Write-Output "===================================================================="
+            Read-Host "Press Enter once you've noted it down, to continue"
         } else {
-            Write-Output "Skipping the shared token -- this server will accept requests from anyone who can reach it."
+            Write-Output "No shared token set -- this server will accept requests from anyone who can reach it on your LAN/Tailscale."
         }
 
         $lines = @(
