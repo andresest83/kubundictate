@@ -1,5 +1,7 @@
 # KubunDictate
 
+![KubunDictate architecture](images/kubundictate-architecture.png)
+
 Local, offline push-to-talk dictation: hold a hotkey, talk, release it,
 and the transcription is copied to your clipboard so you can paste
 (Ctrl+V) it wherever you want. Runs entirely offline (no cloud API calls)
