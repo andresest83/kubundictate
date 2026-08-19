@@ -9,10 +9,16 @@ mac analogue of tray_client.py's %APPDATA% location. Run via
 start_tray_mac.sh.
 
 The global hotkey listener (pynput) needs Accessibility permission
-(System Settings -> Privacy & Security -> Accessibility) -- macOS does
-not reliably auto-prompt for this on a plain venv Python process, unlike
-Microphone access, which does prompt natively. No in-app detection/
-prompting here by design; see README.md for the manual steps.
+(System Settings -> Privacy & Security -> Accessibility). Left alone,
+macOS does not reliably auto-prompt for this on a plain venv Python
+process the way it does for Microphone access -- pynput's own internal
+trust check never sets the "prompt" option, so it fails silently. We
+proactively call the prompting variant of the same underlying check at
+startup (_request_accessibility_trust) so macOS's native permission
+dialog shows up on first launch instead of nothing happening. That
+call doesn't retroactively grant this *running* process the
+permission, though -- granting it still requires quitting and
+relaunching once, same as the manual flow in README.md.
 """
 
 import json
@@ -27,6 +33,15 @@ from pathlib import Path
 
 import rumps
 from PIL import Image
+
+try:
+    from ApplicationServices import AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt
+except ImportError:
+    try:
+        from Quartz import AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt
+    except ImportError:
+        AXIsProcessTrustedWithOptions = None
+        kAXTrustedCheckOptionPrompt = None
 
 import client
 
@@ -102,6 +117,19 @@ def normalize_url(addr):
     if not re.search(r":\d+$", addr):
         addr = f"{addr}:50505"
     return f"http://{addr}"
+
+
+def _request_accessibility_trust():
+    # Triggers macOS's own native "would like to control this computer"
+    # dialog on first launch instead of pynput's silent, log-only failure.
+    # Doesn't grant the running process trust retroactively -- still needs
+    # a quit + relaunch after the user grants it, same as the manual flow.
+    if AXIsProcessTrustedWithOptions is None:
+        return
+    try:
+        AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
+    except Exception:
+        pass
 
 
 def _make_icon_file(color):
@@ -235,6 +263,7 @@ class TrayApp(rumps.App):
 
 
 def main():
+    _request_accessibility_trust()
     TrayApp().run()
 
 

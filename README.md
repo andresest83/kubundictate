@@ -136,21 +136,25 @@ enter a new one.
   (adds/removes a LaunchAgent under `~/Library/LaunchAgents/`). Off by
   default -- launch `start_tray_mac.sh` manually otherwise.
 - **First launch needs Accessibility permission for the hotkey to work**
-  (System Settings -> Privacy & Security -> Accessibility). Unlike the
-  Microphone prompt, macOS does not reliably pop this automatically for
-  a plain venv Python process -- if F9 does nothing and the clipboard
-  never updates, this is almost always why. Run `venv/bin/python3
-  tray_client_mac.py` directly (not via `start_tray_mac.sh`) to see the
-  telltale error printed to the terminal: `This process is not
-  trusted!! Input event monitoring will not be possible until it is
-  added to the list of trusted accessibility clients.` To fix: open
-  Accessibility -- macOS often auto-lists the process there (unchecked)
-  after a failed attempt like this, so look for `python3`/`Python` and
-  enable it; if it's not listed, click **+** and add the exact binary
-  (find its path with `venv/bin/python3 -c "import sys;
-  print(sys.executable)"`). Also worth enabling the same binary under
-  **Input Monitoring** while there, though Accessibility is the one
-  pynput's listener actually checks. Quit and relaunch after granting.
+  (System Settings -> Privacy & Security -> Accessibility). The app
+  proactively triggers macOS's native permission dialog on first launch
+  (`_request_accessibility_trust` in `tray_client_mac.py`) -- normally
+  just click **Allow**/**Open System Settings** there, then **quit and
+  relaunch** (granting doesn't retroactively apply to the already-running
+  process). If that dialog doesn't appear, or F9 does nothing and the
+  clipboard never updates, fall back to the manual route: run
+  `venv/bin/python3 tray_client_mac.py` directly (not via
+  `start_tray_mac.sh`) to see the telltale error printed to the terminal:
+  `This process is not trusted!! Input event monitoring will not be
+  possible until it is added to the list of trusted accessibility
+  clients.` Then open Accessibility -- macOS often auto-lists the process
+  there (unchecked) after a failed attempt like this, so look for
+  `python3`/`Python` and enable it; if it's not listed, click **+** and
+  add the exact binary (find its path with `venv/bin/python3 -c "import
+  sys; print(sys.executable)"`). Also worth enabling the same binary
+  under **Input Monitoring** while there, though Accessibility is the
+  one pynput's listener actually checks. Quit and relaunch after
+  granting.
 - Microphone access is also required and does prompt natively the
   first time recording is attempted.
 
