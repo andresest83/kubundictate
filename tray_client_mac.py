@@ -8,9 +8,11 @@ winreg, tkinter). Settings (recent servers + their tokens) live in
 mac analogue of tray_client.py's %APPDATA% location. Run via
 start_tray_mac.sh.
 
-First launch prompts macOS for Input Monitoring (needed for the global
-hotkey listener) and Microphone access -- native OS prompts, no in-app
-handling here; see README.md.
+The global hotkey listener (pynput) needs Accessibility permission
+(System Settings -> Privacy & Security -> Accessibility) -- macOS does
+not reliably auto-prompt for this on a plain venv Python process, unlike
+Microphone access, which does prompt natively. No in-app detection/
+prompting here by design; see README.md for the manual steps.
 """
 
 import json

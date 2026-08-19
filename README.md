@@ -135,11 +135,24 @@ enter a new one.
 - Click -> **Run at login** to toggle launching automatically at login
   (adds/removes a LaunchAgent under `~/Library/LaunchAgents/`). Off by
   default -- launch `start_tray_mac.sh` manually otherwise.
-- **First launch will prompt macOS for Input Monitoring and Microphone
-  access** (System Settings -> Privacy & Security) -- both are required
-  for the hotkey and recording to work. Grant them when asked; if you
-  miss the prompt, add the terminal/python process manually under those
-  two Privacy & Security panes and relaunch.
+- **First launch needs Accessibility permission for the hotkey to work**
+  (System Settings -> Privacy & Security -> Accessibility). Unlike the
+  Microphone prompt, macOS does not reliably pop this automatically for
+  a plain venv Python process -- if F9 does nothing and the clipboard
+  never updates, this is almost always why. Run `venv/bin/python3
+  tray_client_mac.py` directly (not via `start_tray_mac.sh`) to see the
+  telltale error printed to the terminal: `This process is not
+  trusted!! Input event monitoring will not be possible until it is
+  added to the list of trusted accessibility clients.` To fix: open
+  Accessibility -- macOS often auto-lists the process there (unchecked)
+  after a failed attempt like this, so look for `python3`/`Python` and
+  enable it; if it's not listed, click **+** and add the exact binary
+  (find its path with `venv/bin/python3 -c "import sys;
+  print(sys.executable)"`). Also worth enabling the same binary under
+  **Input Monitoring** while there, though Accessibility is the one
+  pynput's listener actually checks. Quit and relaunch after granting.
+- Microphone access is also required and does prompt natively the
+  first time recording is attempted.
 
 Not yet verified end-to-end on real hardware -- see the note on issue
 #24.
