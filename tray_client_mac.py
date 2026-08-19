@@ -24,13 +24,15 @@ import threading
 from pathlib import Path
 
 import rumps
-from PIL import Image, ImageDraw
+from PIL import Image
 
 import client
 
 MAX_RECENT = 3
 IDLE_COLOR = (46, 134, 222, 255)
 RECORD_COLOR = (235, 77, 75, 255)
+ICON_SOURCE = Path(__file__).resolve().parent / "images" / "kubundictate-icon.png"
+ICON_RENDER_SIZE = 44  # @2x for a 22pt menu-bar icon
 
 SETTINGS_DIR = Path.home() / "Library" / "Application Support" / "KubunDictate"
 SETTINGS_PATH = SETTINGS_DIR / "client_settings.json"
@@ -103,14 +105,15 @@ def normalize_url(addr):
 def _make_icon_file(color):
     # rumps.App.icon wants a file path, not an in-memory image like
     # pystray accepts -- render once per color and swap paths instead.
-    size = 64
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    margin = 6
-    draw.ellipse((margin, margin, size - margin, size - margin), fill=color)
+    # Recolors the mic glyph's alpha mask solid rather than drawing a
+    # plain dot, so idle/recording keep the same silhouette.
+    base = Image.open(ICON_SOURCE).convert("RGBA")
+    tinted = Image.new("RGBA", base.size, color)
+    tinted.putalpha(base.getchannel("A"))
+    tinted = tinted.resize((ICON_RENDER_SIZE, ICON_RENDER_SIZE), Image.LANCZOS)
     fd, path = tempfile.mkstemp(suffix=".png", prefix="kubundictate_icon_")
     os.close(fd)
-    img.save(path)
+    tinted.save(path)
     return path
 
 
