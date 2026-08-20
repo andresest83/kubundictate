@@ -8,6 +8,10 @@
 
 set -euo pipefail
 
+BOLD=$'\033[1m'
+YELLOW=$'\033[0;33m'
+RESET=$'\033[0m'
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 venv_dir="$script_dir/venv"
 venv_python="$venv_dir/bin/python3"
@@ -38,12 +42,16 @@ echo "Run ./start_tray_mac.sh to start dictating -- it asks for your server's LA
 echo "Tailscale address (localhost:<port> if this is the server's own box, and its"
 echo "token, if it has one) the first time it runs, and remembers the last 3 you've used."
 echo ""
-echo "Hold Left Option to talk (not F9 -- bare F-keys default to media functions"
-echo "on a Mac keyboard). First launch needs two separate permissions, both under"
-echo "System Settings -> Privacy & Security: Accessibility and Input Monitoring"
-echo "(Eingabeueberwachung in German). The app triggers both native prompts on"
-echo "first launch -- click Allow/Open System Settings on each, then quit and"
-echo "relaunch. If a permission dialog doesn't list your Terminal app yet, add"
-echo "it via + (add Terminal itself, not python3 -- the file picker won't even"
-echo "let you select a raw binary). See README.md's 'Client (macOS)' section for"
-echo "the full troubleshooting path if the hotkey still does nothing afterward."
+echo "${BOLD}${YELLOW}Hold Left Option${RESET} to record, release to transcribe."
+echo ""
+echo "${BOLD}First launch needs two permissions${RESET} (System Settings -> Privacy & Security):"
+echo "  - ${YELLOW}Accessibility${RESET}"
+echo "  - ${YELLOW}Input Monitoring${RESET} (${YELLOW}Eingabeueberwachung${RESET} in German)"
+echo ""
+echo "A native dialog pops up for each on first launch -- click ${BOLD}Allow${RESET} or"
+echo "${BOLD}Open System Settings${RESET}, then ${BOLD}quit and relaunch${RESET}."
+echo ""
+echo "If Terminal isn't listed under either permission yet: click ${BOLD}+${RESET} and add"
+echo "${BOLD}Terminal itself${RESET} (not python3 -- the picker won't let you select a raw binary)."
+echo ""
+echo "Still stuck? See README.md -> 'Client (macOS)' for the full troubleshooting steps."
