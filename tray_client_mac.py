@@ -8,17 +8,22 @@ winreg, tkinter). Settings (recent servers + their tokens) live in
 mac analogue of tray_client.py's %APPDATA% location. Run via
 start_tray_mac.sh.
 
-The global hotkey listener (pynput) needs Accessibility permission
-(System Settings -> Privacy & Security -> Accessibility). Left alone,
-macOS does not reliably auto-prompt for this on a plain venv Python
-process the way it does for Microphone access -- pynput's own internal
-trust check never sets the "prompt" option, so it fails silently. We
-proactively call the prompting variant of the same underlying check at
-startup (_request_accessibility_trust) so macOS's native permission
-dialog shows up on first launch instead of nothing happening. That
-call doesn't retroactively grant this *running* process the
-permission, though -- granting it still requires quitting and
-relaunching once, same as the manual flow in README.md.
+The global hotkey listener (pynput) needs TWO separate macOS
+permissions, confirmed hands-on rather than assumed: Accessibility
+(System Settings -> Privacy & Security -> Accessibility) silences
+pynput's own internal trust check, but the actual event delivery goes
+through CGEventTapCreate, which is gated independently by Input
+Monitoring (Eingabeuberwachung in German) -- Accessibility alone was
+not enough, the hotkey listener received zero events for any key until
+Input Monitoring was also granted. Left alone, macOS does not reliably
+auto-prompt for either on a plain venv Python process the way it does
+for Microphone access, so we proactively call the prompting variant of
+both underlying checks at startup (_request_accessibility_trust,
+_request_input_monitoring_access) so macOS's native permission dialogs
+show up on first launch instead of nothing happening. Neither call
+retroactively grants the already-running process the permission,
+though -- granting still requires quitting and relaunching once, same
+as the manual flow in README.md.
 """
 
 import json
@@ -42,6 +47,12 @@ except ImportError:
     except ImportError:
         AXIsProcessTrustedWithOptions = None
         kAXTrustedCheckOptionPrompt = None
+
+try:
+    from Quartz import CGPreflightListenEventAccess, CGRequestListenEventAccess
+except ImportError:
+    CGPreflightListenEventAccess = None
+    CGRequestListenEventAccess = None
 
 import client
 
@@ -128,6 +139,22 @@ def _request_accessibility_trust():
         return
     try:
         AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
+    except Exception:
+        pass
+
+
+def _request_input_monitoring_access():
+    # Separate TCC category from Accessibility -- CGEventTapCreate (what
+    # pynput's listener actually uses to receive key events) is gated on
+    # this independently, confirmed hands-on: Accessibility trust alone
+    # left the listener receiving zero events for any key. Same
+    # prompt-then-relaunch caveat as _request_accessibility_trust.
+    if CGRequestListenEventAccess is None:
+        return
+    try:
+        if CGPreflightListenEventAccess is not None and CGPreflightListenEventAccess():
+            return  # already granted
+        CGRequestListenEventAccess()
     except Exception:
         pass
 
@@ -264,6 +291,7 @@ class TrayApp(rumps.App):
 
 def main():
     _request_accessibility_trust()
+    _request_input_monitoring_access()
     TrayApp().run()
 
 

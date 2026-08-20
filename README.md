@@ -126,8 +126,11 @@ Support/KubunDictate/client_settings.json`, remembering the last 3
 servers you've used -- click the menu-bar icon to switch between them or
 enter a new one.
 
-- Hold **F9** to record, release to transcribe. The text lands on the
-  clipboard automatically -- paste it with Cmd+V anywhere.
+- Hold **Left Option** to record, release to transcribe. The text lands
+  on the clipboard automatically -- paste it with Cmd+V anywhere. (Not
+  F9: bare F-keys on a Mac keyboard default to hardware/media functions,
+  so a single unmodified key that doesn't collide with anything was a
+  better default than requiring fn+F9 held together.)
 - The menu-bar icon changes color while recording.
 - A short tone marks start/stop of recording, a higher tone marks a
   successful transcription, and a low tone marks a failed request.
@@ -135,26 +138,33 @@ enter a new one.
 - Click -> **Run at login** to toggle launching automatically at login
   (adds/removes a LaunchAgent under `~/Library/LaunchAgents/`). Off by
   default -- launch `start_tray_mac.sh` manually otherwise.
-- **First launch needs Accessibility permission for the hotkey to work**
-  (System Settings -> Privacy & Security -> Accessibility). The app
-  proactively triggers macOS's native permission dialog on first launch
-  (`_request_accessibility_trust` in `tray_client_mac.py`) -- normally
-  just click **Allow**/**Open System Settings** there, then **quit and
+- **First launch needs two separate permissions for the hotkey to
+  work**, both under System Settings -> Privacy & Security: **Accessibility**
+  and **Input Monitoring** (labeled *Eingabeuberwachung* if your Mac is in
+  German -- confirmed hands-on that the English/German mismatch cost real
+  time here, worth knowing up front on a localized system). These are
+  independent TCC categories: Accessibility silences pynput's internal
+  trust check, but actual key events flow through `CGEventTapCreate`,
+  which is gated separately by Input Monitoring -- Accessibility alone
+  left the hotkey listener receiving nothing at all, for any key, not
+  just the hotkey. The app proactively triggers macOS's native dialog for
+  *both* on first launch (`_request_accessibility_trust` and
+  `_request_input_monitoring_access` in `tray_client_mac.py`) -- normally
+  just click **Allow**/**Open System Settings** on each, then **quit and
   relaunch** (granting doesn't retroactively apply to the already-running
-  process). If that dialog doesn't appear, or F9 does nothing and the
-  clipboard never updates, fall back to the manual route: run
-  `venv/bin/python3 tray_client_mac.py` directly (not via
-  `start_tray_mac.sh`) to see the telltale error printed to the terminal:
-  `This process is not trusted!! Input event monitoring will not be
-  possible until it is added to the list of trusted accessibility
-  clients.` Then open Accessibility -- macOS often auto-lists the process
-  there (unchecked) after a failed attempt like this, so look for
-  `python3`/`Python` and enable it; if it's not listed, click **+** and
-  add the exact binary (find its path with `venv/bin/python3 -c "import
-  sys; print(sys.executable)"`). Also worth enabling the same binary
-  under **Input Monitoring** while there, though Accessibility is the
-  one pynput's listener actually checks. Quit and relaunch after
-  granting.
+  process).
+  - If a permission dialog doesn't list your Terminal app under a given
+    category yet, add it via **+** -- but add the **Terminal app itself**
+    (Terminal.app, iTerm, etc.), not `python3`: macOS attributes
+    permission for a script launched from Terminal to Terminal as the
+    "responsible process," and the file picker won't even let you select
+    a raw binary like the venv's `python3` (only real `.app` bundles are
+    selectable there).
+  - If the hotkey still does nothing and the clipboard never updates
+    after granting both and relaunching, run `venv/bin/python3
+    tray_client_mac.py` directly (not via `start_tray_mac.sh`) to see
+    errors printed to the terminal instead of only into
+    `kubundictate.log`.
 - Microphone access is also required and does prompt natively the
   first time recording is attempted.
 
