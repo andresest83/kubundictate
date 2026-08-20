@@ -1,12 +1,5 @@
 #!/usr/bin/env bash
-# Launches the menu-bar client attached to this terminal (not detached),
-# on purpose, while the mac client is still being verified end-to-end --
-# keeps prints/errors visible right here instead of only in
-# kubundictate.log, so there's one launch path instead of "run this
-# normally, but run the raw python directly whenever something needs
-# debugging." Switch back to a detached background launch (nohup + &)
-# once the mac client is confirmed solid.
-#
+# Launches the menu-bar client, detached from the calling terminal.
 # Run install_client_mac.sh first if venv/ doesn't exist yet.
 
 set -euo pipefail
@@ -19,4 +12,6 @@ if [ ! -x "$venv_python" ]; then
     exit 1
 fi
 
-exec "$venv_python" "$script_dir/tray_client_mac.py"
+nohup "$venv_python" "$script_dir/tray_client_mac.py" >>"$script_dir/kubundictate.log" 2>&1 &
+disown
+echo "KubunDictate started -- look for its icon in the menu bar."

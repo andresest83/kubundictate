@@ -25,8 +25,8 @@ Two independent roles, each with its own installer:
 - **Runs unattended at boot**: working, via a Windows Scheduled Task
   (see "Run as a service" below) -- verified surviving a reboot with no
   one logged in.
-- **Mac client**: available, not yet verified on real hardware -- see
-  "Client (macOS)" below and
+- **Mac client**: working, verified end-to-end on the target hardware
+  (macOS Tahoe, Apple M3 Max) -- see "Client (macOS)" below and
   [issue #24](https://github.com/andresest83/kubundictate/issues/24).
 - **Android client**: planned, not started.
 
@@ -168,8 +168,8 @@ enter a new one.
 - Microphone access is also required and does prompt natively the
   first time recording is attempted.
 
-Not yet verified end-to-end on real hardware -- see the note on issue
-#24.
+Verified end-to-end on the target hardware (macOS Tahoe, Apple M3 Max)
+-- see issue #24.
 
 ## Run as a service (Windows startup, no login required)
 
@@ -299,10 +299,8 @@ VRAM-hungry, drop to `distil-large-v3` or `medium` via `KUBUNDICTATE_MODEL`.
 - `uninstall_client_mac.sh` -- removes the macOS client's local state:
   venv, settings, LaunchAgent, and resets the Accessibility/Input
   Monitoring permission grants, for a genuine clean-slate reinstall
-- `start_tray_mac.sh` -- launches the macOS menu-bar client. Currently
-  runs attached to the calling terminal (not detached) while the mac
-  client is still being verified end-to-end, so prints/errors are
-  visible directly instead of only in `kubundictate.log`
+- `start_tray_mac.sh` -- launches the macOS menu-bar client, detached
+  from the calling terminal
 - `start_server.bat` / `start_server_hidden.bat` -- server launchers
   (foreground / headless-and-logged)
 - `start_tray.bat` -- launches the tray client (`pythonw.exe`, no
