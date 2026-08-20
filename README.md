@@ -1,5 +1,7 @@
 # KubunDictate
 
+![KubunDictate architecture](images/kubundictate-architecture.png)
+
 Local, offline push-to-talk dictation: hold a hotkey, talk, release it,
 and the transcription is copied to your clipboard so you can paste
 (Ctrl+V) it wherever you want. Runs entirely offline (no cloud API calls)
@@ -10,11 +12,11 @@ Two independent roles, each with its own installer:
 - **server** -- runs once, on a machine with an NVIDIA GPU. Loads the
   Whisper model and keeps it resident in VRAM, exposing a transcription
   endpoint over HTTP.
-- **client** -- runs on any Windows PC on your LAN (including the server
-  box itself, if you also want to dictate there), as a system-tray icon.
-  Handles the hotkey, records your mic, sends the audio to the server,
-  and copies the returned text to your clipboard. No GPU or model
-  download required.
+- **client** -- runs on any Windows PC or Mac on your LAN (including the
+  server box itself, if you also want to dictate there), as a
+  tray/menu-bar icon. Handles the hotkey, records your mic, sends the
+  audio to the server, and copies the returned text to your clipboard.
+  No GPU or model download required.
 
 ## Status
 
@@ -23,7 +25,8 @@ Two independent roles, each with its own installer:
 - **Runs unattended at boot**: working, via a Windows Scheduled Task
   (see "Run as a service" below) -- verified surviving a reboot with no
   one logged in.
-- **Mac client**: planned, not started -- see
+- **Mac client**: working, verified end-to-end on the target hardware
+  (macOS Tahoe, Apple M3 Max) -- see "Client (macOS)" below and
   [issue #24](https://github.com/andresest83/kubundictate/issues/24).
 - **Android client**: planned, not started.
 
@@ -46,6 +49,9 @@ creates the venv and installs the tray app's dependencies --
 `start_tray.bat` asks for the server's address itself the first time
 it runs, no `config.bat` needed.
 
+On a Mac, use `install_client_mac.sh` instead -- see "Client (macOS)"
+below. The server is Windows-only (needs the NVIDIA GPU box).
+
 Want to dictate directly on the GPU box too? Run `install_client.ps1`
 there as well, same as any other machine -- point it at
 `localhost:<port>` when it asks for a server address.
@@ -59,14 +65,19 @@ exists, and `install_server.ps1` asks before overwriting an existing
 ```
 python -m venv venv
 venv\Scripts\pip install -r requirements-server.txt   REM on the GPU box
-venv\Scripts\pip install -r requirements-client.txt   REM on any other PC
+venv\Scripts\pip install -r requirements-client.txt   REM on any other Windows PC
+```
+
+```
+python3 -m venv venv
+venv/bin/pip install -r requirements-client-mac.txt   # on a Mac
 ```
 
 For the server, copy `config.bat.example` to `config.bat` and fill in
 the values (see [Configuration](#configuration) below) -- `config.bat`
-is gitignored, so each machine keeps its own local settings. The tray
-client doesn't use `config.bat` at all; skip straight to running
-`start_tray.bat`, described below.
+is gitignored, so each machine keeps its own local settings. Neither
+client uses `config.bat`; skip straight to running `start_tray.bat`
+(Windows) or `start_tray_mac.sh` (macOS), described below.
 
 ### Server (the GPU box)
 
@@ -95,6 +106,70 @@ between them or enter a new one.
   login (adds/removes a `pythonw.exe start_tray.bat`-equivalent entry
   under the current user's Registry Run key). Off by default -- launch
   `start_tray.bat` manually otherwise.
+
+### Client (macOS)
+
+Menu-bar equivalent of the Windows tray client (issue
+[#24](https://github.com/andresest83/kubundictate/issues/24)), same
+record/transcribe engine underneath. From this folder (Terminal, no
+elevation needed):
+
+```
+./install_client_mac.sh
+./start_tray_mac.sh
+```
+
+First launch asks for the server's address (LAN IP or Tailscale IP, or
+`localhost:<port>` if this is the server's own box) and, if the server
+has one, its shared token. Settings are saved to `~/Library/Application
+Support/KubunDictate/client_settings.json`, remembering the last 3
+servers you've used -- click the menu-bar icon to switch between them or
+enter a new one.
+
+- Hold **Left Option** to record, release to transcribe. The text lands
+  on the clipboard automatically -- paste it with Cmd+V anywhere. (Not
+  F9: bare F-keys on a Mac keyboard default to hardware/media functions,
+  so a single unmodified key that doesn't collide with anything was a
+  better default than requiring fn+F9 held together.)
+- The menu-bar icon changes color while recording.
+- A short tone marks start/stop of recording, a higher tone marks a
+  successful transcription, and a low tone marks a failed request.
+- Click the menu-bar icon -> **Quit** to exit.
+- Click -> **Run at login** to toggle launching automatically at login
+  (adds/removes a LaunchAgent under `~/Library/LaunchAgents/`). Off by
+  default -- launch `start_tray_mac.sh` manually otherwise.
+- **First launch needs two separate permissions for the hotkey to
+  work**, both under System Settings -> Privacy & Security: **Accessibility**
+  and **Input Monitoring** (labeled *Eingabeuberwachung* if your Mac is in
+  German -- confirmed hands-on that the English/German mismatch cost real
+  time here, worth knowing up front on a localized system). These are
+  independent TCC categories: Accessibility silences pynput's internal
+  trust check, but actual key events flow through `CGEventTapCreate`,
+  which is gated separately by Input Monitoring -- Accessibility alone
+  left the hotkey listener receiving nothing at all, for any key, not
+  just the hotkey. The app proactively triggers macOS's native dialog for
+  *both* on first launch (`_request_accessibility_trust` and
+  `_request_input_monitoring_access` in `tray_client_mac.py`) -- normally
+  just click **Allow**/**Open System Settings** on each, then **quit and
+  relaunch** (granting doesn't retroactively apply to the already-running
+  process).
+  - If a permission dialog doesn't list your Terminal app under a given
+    category yet, add it via **+** -- but add the **Terminal app itself**
+    (Terminal.app, iTerm, etc.), not `python3`: macOS attributes
+    permission for a script launched from Terminal to Terminal as the
+    "responsible process," and the file picker won't even let you select
+    a raw binary like the venv's `python3` (only real `.app` bundles are
+    selectable there).
+  - If the hotkey still does nothing and the clipboard never updates
+    after granting both and relaunching, run `venv/bin/python3
+    tray_client_mac.py` directly (not via `start_tray_mac.sh`) to see
+    errors printed to the terminal instead of only into
+    `kubundictate.log`.
+- Microphone access is also required and does prompt natively the
+  first time recording is attempted.
+
+Verified end-to-end on the target hardware (macOS Tahoe, Apple M3 Max)
+-- see issue #24.
 
 ## Run as a service (Windows startup, no login required)
 
@@ -206,16 +281,26 @@ VRAM-hungry, drop to `distil-large-v3` or `medium` via `KUBUNDICTATE_MODEL`.
 - `server.py` -- FastAPI transcription server (GPU box), entrypoint
 - `client.py` -- hotkey/record/clipboard engine, imported by
   `tray_client.py` (not a standalone entrypoint)
-- `tray_client.py` -- system-tray client entrypoint: `client.py`'s
+- `tray_client.py` -- Windows system-tray client entrypoint: `client.py`'s
   engine plus the tray icon/menu and the recent-servers settings file
   (see "Client")
+- `tray_client_mac.py` -- macOS menu-bar client entrypoint: same
+  `client.py` engine, `rumps` instead of `pystray`/winreg/tkinter (see
+  "Client (macOS)")
 - `audio.py` -- shared WAV<->float32 conversion helpers
 - `venv/` -- self-contained Python virtual environment (not committed)
 - `install_server.ps1` -- one-shot server setup: venv, dependencies,
   `config.bat`, firewall rule, and (optionally) the startup service
   (see "Quick install")
-- `install_client.ps1` -- one-shot client setup: venv, dependencies
-  (see "Quick install")
+- `install_client.ps1` -- one-shot Windows client setup: venv,
+  dependencies (see "Quick install")
+- `install_client_mac.sh` -- one-shot macOS client setup: venv,
+  dependencies (see "Client (macOS)")
+- `uninstall_client_mac.sh` -- removes the macOS client's local state:
+  venv, settings, LaunchAgent, and resets the Accessibility/Input
+  Monitoring permission grants, for a genuine clean-slate reinstall
+- `start_tray_mac.sh` -- launches the macOS menu-bar client, detached
+  from the calling terminal
 - `start_server.bat` / `start_server_hidden.bat` -- server launchers
   (foreground / headless-and-logged)
 - `start_tray.bat` -- launches the tray client (`pythonw.exe`, no
@@ -227,5 +312,5 @@ VRAM-hungry, drop to `distil-large-v3` or `medium` via `KUBUNDICTATE_MODEL`.
   task state + a live `/health` hit (see "Check status")
 - `config.bat.example` -- template for the server's settings (copy to
   `config.bat`, which is gitignored)
-- `requirements-server.txt` / `requirements-client.txt` -- pip
-  dependencies for each role
+- `requirements-server.txt` / `requirements-client.txt` /
+  `requirements-client-mac.txt` -- pip dependencies for each role

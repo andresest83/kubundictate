@@ -1,0 +1,8 @@
+numpy
+sounddevice
+pyperclip
+pynput
+requests
+rumps
+Pillow
+pyobjc-framework-ApplicationServices

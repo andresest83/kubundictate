@@ -7,6 +7,7 @@ imported by tray_client.py, which owns the stop_event passed to run().
 
 import os
 import queue
+import sys
 
 import numpy as np
 import requests
@@ -28,7 +29,16 @@ class Settings:
 
 settings = Settings()
 SAMPLE_RATE = 16000
-HOTKEY = keyboard.Key.f9  # hold to record, release to transcribe
+# Bare F-keys on a Mac keyboard default to hardware/media functions (need
+# fn held to send the real F9 keycode) -- Left Option is a single,
+# unmodified key that doesn't collide with anything, so it's the mac
+# default instead. Windows keeps F9, untouched.
+if sys.platform == "darwin":
+    HOTKEY = keyboard.Key.alt_l
+    HOTKEY_NAME = "Left Option"
+else:
+    HOTKEY = keyboard.Key.f9
+    HOTKEY_NAME = "F9"
 REQUEST_TIMEOUT = 120  # seconds
 
 # --------------------------------------------------------------------------
@@ -48,6 +58,15 @@ def _beep(freq, duration_ms):
         import winsound
 
         winsound.Beep(freq, duration_ms)
+        return
+    except ImportError:
+        pass  # not on Windows -- fall through to the sounddevice tone below
+
+    try:
+        t = np.linspace(0, duration_ms / 1000, int(SAMPLE_RATE * duration_ms / 1000), endpoint=False)
+        tone = (0.3 * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+        sd.play(tone, SAMPLE_RATE)
+        sd.wait()
     except Exception:
         pass
 
@@ -129,7 +148,7 @@ def run(stop_event):
         )
 
     print(f"Server: {settings.server_url} (token auth: {'on' if settings.token else 'off'})")
-    print("Hold F9 to talk, release to transcribe + copy to clipboard.")
+    print(f"Hold {HOTKEY_NAME} to talk, release to transcribe + copy to clipboard.")
 
     stream = sd.InputStream(
         samplerate=SAMPLE_RATE,

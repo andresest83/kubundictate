@@ -33,16 +33,24 @@ Status:
    mode-dispatched one (that `kubundictate.py`/`KUBUNDICTATE_MODE`
    layer was retired in #21 once the plain console client it served
    was fully superseded by the tray client). See README.md for details.
-2. **Mac client** -- next, filed as
-   [#24](https://github.com/andresest83/kubundictate/issues/24).
+2. **Mac client** -- **implemented and verified 2026-08-20** via
+   `tray_client_mac.py` (PR [#27](https://github.com/andresest83/kubundictate/pull/27)).
    Concrete motivation: the user's wife wants to use it occasionally
-   from her Mac. Target machine confirmed: macOS 26.5.2 (Tahoe), Apple
-   M3 Max (Apple Silicon/arm64) -- modern OS + chip, no Intel/Rosetta
-   fallback needed for the initial build. Same HTTP contract against
-   `server.py`, different hotkey/audio-capture libraries and explicit
-   macOS permission prompts (Input Monitoring, Microphone) where
-   `pynput`/`sounddevice` don't behave the same as on Windows. Not yet
-   scoped in detail -- plan before coding.
+   from her Mac. Target machine: macOS 26.5.2 (Tahoe), Apple M3 Max
+   (Apple Silicon/arm64). Same HTTP contract against `server.py`, no
+   server changes. `rumps` for the menu-bar surface (not `pystray`);
+   hotkey is **Left Option**, not F9 -- bare F-keys default to
+   hardware/media functions on a Mac keyboard without holding fn.
+   Real bug found via hands-on testing on the target machine: the
+   global hotkey listener (`pynput`) needs **two** independent macOS
+   permissions, not one -- Accessibility silences `pynput`'s internal
+   trust check, but actual key events flow through `CGEventTapCreate`,
+   gated separately by Input Monitoring (*Eingabeuberwachung* in
+   German). Accessibility alone left the listener receiving zero
+   events for any key. Both native permission dialogs now trigger
+   proactively on first launch instead of failing silently. User
+   verified end-to-end on the real target Mac: install, both
+   permission grants, hold Left Option, record, transcribe, clipboard.
 3. **Android client** -- later; not yet scoped.
 
 Architecture that's now in place and should be preserved by future
@@ -201,14 +209,22 @@ per issue:
   that box"). User verified the full flow end-to-end on the real GPU
   box and client machine.
 - [#24](https://github.com/andresest83/kubundictate/issues/24) **Mac
-  client** (`priority: high`) -- concrete motivation: user's wife wants
-  to use it occasionally from her Mac. Target machine confirmed: macOS
-  26.5.2 (Tahoe), Apple M3 Max (Apple Silicon/arm64). Menu-bar
-  equivalent of `tray_client.py`. Not scoped: macOS permission-prompt
-  UX (Input Monitoring, Microphone), whether `pystray` is solid enough
-  on macOS or `rumps` is needed instead, and whether it needs real
-  `.app` packaging given the target user isn't comfortable with
-  Terminal. Needs its own design pass before coding, same as #8.
+  client** (`priority: high`) -- **implemented and verified
+  2026-08-20** via `tray_client_mac.py` (PR
+  [#27](https://github.com/andresest83/kubundictate/pull/27)).
+  Menu-bar equivalent of `tray_client.py`, using `rumps` (decided over
+  `pystray`) and plain Terminal-based install/uninstall shell scripts
+  (`.app` packaging deliberately skipped -- not needed). Hotkey is
+  Left Option, not F9 (Mac F-keys default to media functions without
+  fn held). The permission-prompt UX turned out to be the real
+  substance of this issue: `pynput`'s hotkey listener needs both
+  Accessibility and Input Monitoring granted independently -- found
+  only through hands-on testing on the target machine, since
+  Accessibility alone looked sufficient (silenced pynput's own
+  warning) but left zero key events actually reaching the listener.
+  Both permissions now get proactive native-dialog prompts on first
+  launch. User verified the full flow end-to-end on the real target
+  Mac.
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option
