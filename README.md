@@ -296,8 +296,13 @@ VRAM-hungry, drop to `distil-large-v3` or `medium` via `KUBUNDICTATE_MODEL`.
   dependencies (see "Quick install")
 - `install_client_mac.sh` -- one-shot macOS client setup: venv,
   dependencies (see "Client (macOS)")
-- `start_tray_mac.sh` -- launches the macOS menu-bar client, detached
-  from the calling terminal
+- `uninstall_client_mac.sh` -- removes the macOS client's local state:
+  venv, settings, LaunchAgent, and resets the Accessibility/Input
+  Monitoring permission grants, for a genuine clean-slate reinstall
+- `start_tray_mac.sh` -- launches the macOS menu-bar client. Currently
+  runs attached to the calling terminal (not detached) while the mac
+  client is still being verified end-to-end, so prints/errors are
+  visible directly instead of only in `kubundictate.log`
 - `start_server.bat` / `start_server_hidden.bat` -- server launchers
   (foreground / headless-and-logged)
 - `start_tray.bat` -- launches the tray client (`pythonw.exe`, no
