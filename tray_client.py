@@ -20,7 +20,7 @@ import winreg
 from pathlib import Path
 from tkinter import simpledialog
 
-from PIL import Image, ImageDraw
+from PIL import Image
 import pystray
 
 import client
@@ -28,6 +28,8 @@ import client
 MAX_RECENT = 3
 IDLE_COLOR = (46, 134, 222, 255)
 RECORD_COLOR = (235, 77, 75, 255)
+ICON_SOURCE = Path(__file__).resolve().parent / "images" / "kubundictate-icon.png"
+ICON_RENDER_SIZE = 64
 
 SETTINGS_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "KubunDictate"
 SETTINGS_PATH = SETTINGS_DIR / "client_settings.json"
@@ -97,12 +99,14 @@ def normalize_url(addr):
 
 
 def _make_icon_image(color):
-    size = 64
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    margin = 6
-    draw.ellipse((margin, margin, size - margin, size - margin), fill=color)
-    return img
+    # Tints the mic glyph's alpha mask solid rather than drawing a plain
+    # dot, so idle/recording keep the same silhouette (mirrors
+    # tray_client_mac.py's _make_icon_file). pystray.Icon.icon accepts a
+    # PIL Image directly, so no temp-file dance is needed here.
+    base = Image.open(ICON_SOURCE).convert("RGBA")
+    tinted = Image.new("RGBA", base.size, color)
+    tinted.putalpha(base.getchannel("A"))
+    return tinted.resize((ICON_RENDER_SIZE, ICON_RENDER_SIZE), Image.LANCZOS)
 
 
 def _watch_recording(icon, stop_event):
