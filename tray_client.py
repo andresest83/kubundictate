@@ -28,7 +28,7 @@ import client
 MAX_RECENT = 3
 IDLE_COLOR = (46, 134, 222, 255)
 RECORD_COLOR = (235, 77, 75, 255)
-ICON_SOURCE = Path(__file__).resolve().parent / "images" / "kubundictate-icon.png"
+ICON_SOURCE = Path(__file__).resolve().parent / "images" / "condor.png"
 ICON_RENDER_SIZE = 64
 
 SETTINGS_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "KubunDictate"
@@ -99,11 +99,15 @@ def normalize_url(addr):
 
 
 def _make_icon_image(color):
-    # Tints the mic glyph's alpha mask solid rather than drawing a plain
-    # dot, so idle/recording keep the same silhouette (mirrors
+    # Tints the glyph's alpha mask solid rather than drawing a plain dot,
+    # so idle/recording keep the same silhouette (mirrors
     # tray_client_mac.py's _make_icon_file). pystray.Icon.icon accepts a
-    # PIL Image directly, so no temp-file dance is needed here.
+    # PIL Image directly, so no temp-file dance is needed here. Crops to
+    # the alpha channel's bounding box first -- source art may have a lot
+    # of transparent padding around the glyph, which would otherwise
+    # shrink further once Windows renders this at ~16px in the tray.
     base = Image.open(ICON_SOURCE).convert("RGBA")
+    base = base.crop(base.getbbox())
     tinted = Image.new("RGBA", base.size, color)
     tinted.putalpha(base.getchannel("A"))
     return tinted.resize((ICON_RENDER_SIZE, ICON_RENDER_SIZE), Image.LANCZOS)
