@@ -57,9 +57,8 @@ except ImportError:
 import client
 
 MAX_RECENT = 3
-IDLE_COLOR = (46, 134, 222, 255)
 RECORD_COLOR = (235, 77, 75, 255)
-ICON_SOURCE = Path(__file__).resolve().parent / "images" / "kubundictate-icon.png"
+ICON_SOURCE = Path(__file__).resolve().parent / "images" / "condor.png"
 ICON_RENDER_SIZE = 44  # @2x for a 22pt menu-bar icon
 
 SETTINGS_DIR = Path.home() / "Library" / "Application Support" / "KubunDictate"
@@ -159,18 +158,25 @@ def _request_input_monitoring_access():
         pass
 
 
-def _make_icon_file(color):
+def _make_icon_file(recording):
     # rumps.App.icon wants a file path, not an in-memory image like
-    # pystray accepts -- render once per color and swap paths instead.
-    # Recolors the mic glyph's alpha mask solid rather than drawing a
-    # plain dot, so idle/recording keep the same silhouette.
+    # pystray accepts -- render once per state and swap paths instead.
+    # Idle keeps the glyph's actual artwork/colors as-is. Recording tints
+    # its alpha mask solid red instead, so the two states stay visually
+    # distinct without needing a second source image. Crops to the alpha
+    # channel's bounding box first -- source art may have a lot of
+    # transparent padding around the glyph, which would otherwise shrink
+    # it further at menu-bar-icon scale.
     base = Image.open(ICON_SOURCE).convert("RGBA")
-    tinted = Image.new("RGBA", base.size, color)
-    tinted.putalpha(base.getchannel("A"))
-    tinted = tinted.resize((ICON_RENDER_SIZE, ICON_RENDER_SIZE), Image.LANCZOS)
+    base = base.crop(base.getbbox())
+    if recording:
+        tinted = Image.new("RGBA", base.size, RECORD_COLOR)
+        tinted.putalpha(base.getchannel("A"))
+        base = tinted
+    base = base.resize((ICON_RENDER_SIZE, ICON_RENDER_SIZE), Image.LANCZOS)
     fd, path = tempfile.mkstemp(suffix=".png", prefix="kubundictate_icon_")
     os.close(fd)
-    tinted.save(path)
+    base.save(path)
     return path
 
 
@@ -179,8 +185,8 @@ class TrayApp(rumps.App):
         self.recent = load_recent()
         self.stop_event = threading.Event()
         self._recording = False
-        self._idle_icon = _make_icon_file(IDLE_COLOR)
-        self._record_icon = _make_icon_file(RECORD_COLOR)
+        self._idle_icon = _make_icon_file(False)
+        self._record_icon = _make_icon_file(True)
         # quit_button=None so our own Quit item can set stop_event before
         # calling rumps.quit_application().
         super().__init__("KubunDictate", icon=self._idle_icon, quit_button=None)
