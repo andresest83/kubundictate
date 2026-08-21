@@ -74,8 +74,22 @@ async def transcribe(audio: UploadFile, _auth=Depends(_check_auth)):
         language=LANGUAGE,
         vad_filter=True,
         beam_size=5,
+        # Without this, each segment's decoding is seeded with the
+        # previous segment's *text*. On a low-confidence/silent tail
+        # that snowballs -- one hallucinated "Bye bye." makes the next
+        # segment more likely to repeat it, and so on (#30).
+        condition_on_previous_text=False,
     )
-    text = "".join(seg.text for seg in segments).strip()
+    # Drop segments faster-whisper itself flags as low-confidence/silent
+    # or repetitive, instead of appending every segment as-is. Same
+    # thresholds as Whisper's own reference decoder.
+    text = "".join(
+        seg.text
+        for seg in segments
+        if seg.no_speech_prob < 0.6
+        and seg.avg_logprob > -1.0
+        and seg.compression_ratio < 2.4
+    ).strip()
     elapsed = time.time() - t0
     print(f'[{elapsed:.2f}s] "{text}"')
 
