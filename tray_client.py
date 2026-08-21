@@ -26,7 +26,6 @@ import pystray
 import client
 
 MAX_RECENT = 3
-IDLE_COLOR = (46, 134, 222, 255)
 RECORD_COLOR = (235, 77, 75, 255)
 ICON_SOURCE = Path(__file__).resolve().parent / "images" / "condor.png"
 ICON_RENDER_SIZE = 64
@@ -98,19 +97,22 @@ def normalize_url(addr):
     return f"http://{addr}"
 
 
-def _make_icon_image(color):
-    # Tints the glyph's alpha mask solid rather than drawing a plain dot,
-    # so idle/recording keep the same silhouette (mirrors
-    # tray_client_mac.py's _make_icon_file). pystray.Icon.icon accepts a
-    # PIL Image directly, so no temp-file dance is needed here. Crops to
-    # the alpha channel's bounding box first -- source art may have a lot
-    # of transparent padding around the glyph, which would otherwise
-    # shrink further once Windows renders this at ~16px in the tray.
+def _make_icon_image(recording):
+    # Idle keeps the glyph's actual artwork/colors as-is. Recording tints
+    # its alpha mask solid red instead, so the two states stay visually
+    # distinct without needing a second source image. pystray.Icon.icon
+    # accepts a PIL Image directly, so no temp-file dance is needed here.
+    # Crops to the alpha channel's bounding box first -- source art may
+    # have a lot of transparent padding around the glyph, which would
+    # otherwise shrink further once Windows renders this at ~16px in the
+    # tray.
     base = Image.open(ICON_SOURCE).convert("RGBA")
     base = base.crop(base.getbbox())
-    tinted = Image.new("RGBA", base.size, color)
-    tinted.putalpha(base.getchannel("A"))
-    return tinted.resize((ICON_RENDER_SIZE, ICON_RENDER_SIZE), Image.LANCZOS)
+    if recording:
+        tinted = Image.new("RGBA", base.size, RECORD_COLOR)
+        tinted.putalpha(base.getchannel("A"))
+        base = tinted
+    return base.resize((ICON_RENDER_SIZE, ICON_RENDER_SIZE), Image.LANCZOS)
 
 
 def _watch_recording(icon, stop_event):
@@ -118,7 +120,7 @@ def _watch_recording(icon, stop_event):
     while not stop_event.is_set():
         current = client.is_recording()
         if current != last:
-            icon.icon = _make_icon_image(RECORD_COLOR if current else IDLE_COLOR)
+            icon.icon = _make_icon_image(current)
             last = current
         time.sleep(0.15)
 
@@ -130,7 +132,7 @@ class TrayApp:
         self._tk_root = None
         self.icon = pystray.Icon(
             "kubundictate",
-            icon=_make_icon_image(IDLE_COLOR),
+            icon=_make_icon_image(False),
             title="KubunDictate",
             menu=self._build_menu(),
         )
