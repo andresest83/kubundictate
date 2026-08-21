@@ -251,6 +251,7 @@ per issue:
   `condition_on_previous_text=False`, filtering on `no_speech_prob`/
   `avg_logprob`/`compression_ratio` instead of returning every segment
   as-is.
+- [#37](https://github.com/andresest83/kubundictate/issues/37) **Use condor_waves.png for tray/menu bar icon on Windows and Mac clients** -- updated `ICON_SOURCE` in `tray_client.py` and `tray_client_mac.py` to use `images/condor_waves.png`.
 - [#31](https://github.com/andresest83/kubundictate/issues/31) **Use
   the mic icon on the Windows tray client too** (`enhancement`,
   `priority: low`) -- `tray_client_mac.py` already tints

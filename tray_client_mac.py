@@ -58,7 +58,7 @@ import client
 
 MAX_RECENT = 3
 RECORD_COLOR = (235, 77, 75, 255)
-ICON_SOURCE = Path(__file__).resolve().parent / "images" / "condor.png"
+ICON_SOURCE = Path(__file__).resolve().parent / "images" / "condor_waves.png"
 ICON_RENDER_SIZE = 44  # @2x for a 22pt menu-bar icon
 
 SETTINGS_DIR = Path.home() / "Library" / "Application Support" / "KubunDictate"
