@@ -177,12 +177,16 @@ per issue:
   terminal block until the tray app was quit. Verified end-to-end on
   the GPU box and reconnected the remote client after the token fix.
 - [#16](https://github.com/andresest83/kubundictate/issues/16)
-  **Client feedback beyond clipboard + beep** (`priority: medium`) --
-  open design question, not yet scoped: does the client need a visual
-  surface (WisprFlow-style always-on-top popup showing the
-  transcription) beyond today's audio cues + tray icon color? Filed
-  separately from #15 so the cleanup work doesn't wait on this
-  open-ended one. Not yet started.
+  **Client feedback beyond clipboard + beep: always-on-top popup?**
+  (`priority: medium`) -- now scoped (2026-08-21): a transient toast,
+  not an always-available window -- one cue while actively listening,
+  a separate "Copied to clipboard" confirmation auto-dismissing after
+  ~1s, a distinctive animation (mic + soundwaves, or something more
+  characterful), positioned top-center/top-right without overlapping
+  the taskbar. Applies to both clients, supplements (not replaces) the
+  existing beeps/icon-color cues. Implementation questions from the
+  original filing (always-on-top window management, avoiding
+  focus-stealing, multi-monitor placement) still open. Not yet started.
 - [#18](https://github.com/andresest83/kubundictate/issues/18)
   **Multi-machine auth is impractical** (`priority: medium`) -- even
   after #15's fixes, pairing a new client still means reading a
@@ -225,6 +229,35 @@ per issue:
   Both permissions now get proactive native-dialog prompts on first
   launch. User verified the full flow end-to-end on the real target
   Mac.
+- [#28](https://github.com/andresest83/kubundictate/issues/28)
+  **Windows tray client: no beep at all on record/transcribe** (`bug`)
+  -- **implemented and verified 2026-08-21** via PR
+  [#29](https://github.com/andresest83/kubundictate/pull/29).
+  Regression from #24's mac-compatible `_beep()` change: the winsound
+  exception handler was narrowed from catching any `Exception` to only
+  `ImportError`, so a real winsound failure (e.g. no default playback
+  device -- the GPU box this was caught on) propagated out of `_beep()`
+  and cut short whatever called it, instead of falling through to the
+  sounddevice fallback like intended. Broadened back to catching any
+  exception. User verified the beep and tray icon color change both
+  work again.
+- [#30](https://github.com/andresest83/kubundictate/issues/30)
+  **Transcriptions sometimes contain hallucinated/repetitive filler
+  text** (`bug`, `priority: high`) -- not scoped yet. Likely a known
+  Whisper/faster-whisper hallucination pattern (subtitle-training-data
+  sign-off phrases like "thank you"/"bye bye" on silence or a
+  low-confidence tail end), possibly worsened by `beam_size=5`.
+  Candidate directions: tighter VAD params,
+  `condition_on_previous_text=False`, filtering on `no_speech_prob`/
+  `avg_logprob`/`compression_ratio` instead of returning every segment
+  as-is.
+- [#31](https://github.com/andresest83/kubundictate/issues/31) **Use
+  the mic icon on the Windows tray client too** (`enhancement`,
+  `priority: low`) -- `tray_client_mac.py` already tints
+  `images/kubundictate-icon.png` for idle/recording (#24);
+  `tray_client.py` still draws a plain colored dot via
+  `_make_icon_image`. Simpler on Windows even -- `pystray.Icon.icon`
+  takes a PIL `Image` directly, no temp-file path needed like rumps.
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option
