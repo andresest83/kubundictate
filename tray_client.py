@@ -27,10 +27,7 @@ import client
 
 MAX_RECENT = 3
 ICON_DIR = Path(__file__).resolve().parent / "images"
-ICON_SIZE = 16  # the actual Windows tray render size -- use the hand-tuned
-# -small-sourced asset (thickened strokes), not the 64px full-detail one
-# scaled down. Fine linework "turns to mud below 32px" per
-# kubundictate-icons/README.md; that's what made the icon look faint/small.
+ICON_SIZE = 64  # matches images/kubundictate-<state>-64.png
 PULSE_INTERVAL = 0.7  # seconds between listening-a/listening-b swaps
 
 SETTINGS_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "KubunDictate"
