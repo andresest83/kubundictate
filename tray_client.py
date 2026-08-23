@@ -26,9 +26,9 @@ import pystray
 import client
 
 MAX_RECENT = 3
-RECORD_COLOR = (235, 77, 75, 255)
-ICON_SOURCE = Path(__file__).resolve().parent / "images" / "condor.png"
-ICON_RENDER_SIZE = 64
+ICON_DIR = Path(__file__).resolve().parent / "images"
+ICON_SIZE = 64  # matches images/kubundictate-<state>-64.png
+PULSE_INTERVAL = 0.7  # seconds between listening-a/listening-b swaps
 
 SETTINGS_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "KubunDictate"
 SETTINGS_PATH = SETTINGS_DIR / "client_settings.json"
@@ -97,32 +97,56 @@ def normalize_url(addr):
     return f"http://{addr}"
 
 
-def _make_icon_image(recording):
-    # Idle keeps the glyph's actual artwork/colors as-is. Recording tints
-    # its alpha mask solid red instead, so the two states stay visually
-    # distinct without needing a second source image. pystray.Icon.icon
-    # accepts a PIL Image directly, so no temp-file dance is needed here.
-    # Crops to the alpha channel's bounding box first -- source art may
-    # have a lot of transparent padding around the glyph, which would
-    # otherwise shrink further once Windows renders this at ~16px in the
-    # tray.
-    base = Image.open(ICON_SOURCE).convert("RGBA")
-    base = base.crop(base.getbbox())
-    if recording:
-        tinted = Image.new("RGBA", base.size, RECORD_COLOR)
-        tinted.putalpha(base.getchannel("A"))
-        base = tinted
-    return base.resize((ICON_RENDER_SIZE, ICON_RENDER_SIZE), Image.LANCZOS)
+def _fill_frame(img, size):
+    # The source PNGs carry a few px of transparent margin around the
+    # glyph (design-grid padding). The OS fits the whole canvas -- margin
+    # included -- into the tray/menu-bar slot, so that margin is wasted
+    # space the glyph could otherwise occupy. Crop to the visible pixels
+    # and scale back up (aspect preserved) to reclaim it.
+    img = img.convert("RGBA")
+    bbox = img.getbbox()
+    if bbox:
+        img = img.crop(bbox)
+    scale = min(size / img.width, size / img.height)
+    new_size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
+    img = img.resize(new_size, Image.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.paste(img, ((size - new_size[0]) // 2, (size - new_size[1]) // 2), img)
+    return canvas
 
 
-def _watch_recording(icon, stop_event):
-    last = False
+def _load_icons():
+    # pystray.Icon.icon accepts a PIL Image directly -- no temp-file dance
+    # needed, unlike the mac client's rumps.App.icon. Pre-rendered per
+    # state/size in images/ (see kubundictate-icons/README.md).
+    return {
+        state: _fill_frame(Image.open(ICON_DIR / f"kubundictate-{state}-{ICON_SIZE}.png"), ICON_SIZE)
+        for state in ("idle", "listening-a", "listening-b")
+    }
+
+
+def _current_icon_state(pulse_a):
+    if client.is_transcribing():
+        return "listening-a"  # held static while awaiting the server
+    if client.is_recording():
+        return "listening-a" if pulse_a else "listening-b"
+    return "idle"
+
+
+def _watch_recording(icon, icons, stop_event):
+    last_state = None
+    pulse_a = True
+    last_pulse = time.monotonic()
     while not stop_event.is_set():
-        current = client.is_recording()
-        if current != last:
-            icon.icon = _make_icon_image(current)
-            last = current
-        time.sleep(0.15)
+        now = time.monotonic()
+        if now - last_pulse >= PULSE_INTERVAL:
+            pulse_a = not pulse_a
+            last_pulse = now
+        state = _current_icon_state(pulse_a)
+        if state != last_state:
+            icon.icon = icons[state]
+            last_state = state
+        time.sleep(0.1)
 
 
 class TrayApp:
@@ -130,9 +154,10 @@ class TrayApp:
         self.recent = load_recent()
         self.stop_event = threading.Event()
         self._tk_root = None
+        self._icons = _load_icons()
         self.icon = pystray.Icon(
             "kubundictate",
-            icon=_make_icon_image(False),
+            icon=self._icons["idle"],
             title="KubunDictate",
             menu=self._build_menu(),
         )
@@ -255,7 +280,9 @@ class TrayApp:
             daemon=True,
         ).start()
         threading.Thread(
-            target=_watch_recording, args=(self.icon, self.stop_event), daemon=True
+            target=_watch_recording,
+            args=(self.icon, self._icons, self.stop_event),
+            daemon=True,
         ).start()
 
         self.icon.run(setup=self._on_ready)

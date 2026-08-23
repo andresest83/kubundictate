@@ -34,6 +34,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 import rumps
@@ -57,9 +58,10 @@ except ImportError:
 import client
 
 MAX_RECENT = 3
-RECORD_COLOR = (235, 77, 75, 255)
-ICON_SOURCE = Path(__file__).resolve().parent / "images" / "condor.png"
+ICON_DIR = Path(__file__).resolve().parent / "images"
+ICON_SOURCE_SIZE = 48  # nearest pre-rendered size at/above ICON_RENDER_SIZE
 ICON_RENDER_SIZE = 44  # @2x for a 22pt menu-bar icon
+PULSE_INTERVAL = 0.7  # seconds between listening-a/listening-b swaps
 
 SETTINGS_DIR = Path.home() / "Library" / "Application Support" / "KubunDictate"
 SETTINGS_PATH = SETTINGS_DIR / "client_settings.json"
@@ -158,38 +160,60 @@ def _request_input_monitoring_access():
         pass
 
 
-def _make_icon_file(recording):
+def _fill_frame(img, size):
+    # The source PNGs carry a few px of transparent margin around the
+    # glyph (design-grid padding). The OS fits the whole canvas -- margin
+    # included -- into the menu-bar slot, so that margin is wasted space
+    # the glyph could otherwise occupy. Crop to the visible pixels and
+    # scale back up (aspect preserved) to reclaim it.
+    img = img.convert("RGBA")
+    bbox = img.getbbox()
+    if bbox:
+        img = img.crop(bbox)
+    scale = min(size / img.width, size / img.height)
+    new_size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
+    img = img.resize(new_size, Image.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.paste(img, ((size - new_size[0]) // 2, (size - new_size[1]) // 2), img)
+    return canvas
+
+
+def _make_icon_file(state):
     # rumps.App.icon wants a file path, not an in-memory image like
     # pystray accepts -- render once per state and swap paths instead.
-    # Idle keeps the glyph's actual artwork/colors as-is. Recording tints
-    # its alpha mask solid red instead, so the two states stay visually
-    # distinct without needing a second source image. Crops to the alpha
-    # channel's bounding box first -- source art may have a lot of
-    # transparent padding around the glyph, which would otherwise shrink
-    # it further at menu-bar-icon scale.
-    base = Image.open(ICON_SOURCE).convert("RGBA")
-    base = base.crop(base.getbbox())
-    if recording:
-        tinted = Image.new("RGBA", base.size, RECORD_COLOR)
-        tinted.putalpha(base.getchannel("A"))
-        base = tinted
-    base = base.resize((ICON_RENDER_SIZE, ICON_RENDER_SIZE), Image.LANCZOS)
+    # Pre-rendered per state/size in images/ (see
+    # kubundictate-icons/README.md); resize the nearest source size down
+    # to the actual menu-bar render size instead of shipping a duplicate
+    # 44px asset.
+    src = ICON_DIR / f"kubundictate-{state}-{ICON_SOURCE_SIZE}.png"
+    resized = _fill_frame(Image.open(src), ICON_RENDER_SIZE)
     fd, path = tempfile.mkstemp(suffix=".png", prefix="kubundictate_icon_")
     os.close(fd)
-    base.save(path)
+    resized.save(path)
     return path
+
+
+def _current_icon_state(pulse_a):
+    if client.is_transcribing():
+        return "listening-a"  # held static while awaiting the server
+    if client.is_recording():
+        return "listening-a" if pulse_a else "listening-b"
+    return "idle"
 
 
 class TrayApp(rumps.App):
     def __init__(self):
         self.recent = load_recent()
         self.stop_event = threading.Event()
-        self._recording = False
-        self._idle_icon = _make_icon_file(False)
-        self._record_icon = _make_icon_file(True)
+        self._icon_state = "idle"
+        self._pulse_a = True
+        self._last_pulse = time.monotonic()
+        self._icon_paths = {
+            state: _make_icon_file(state) for state in ("idle", "listening-a", "listening-b")
+        }
         # quit_button=None so our own Quit item can set stop_event before
         # calling rumps.quit_application().
-        super().__init__("KubunDictate", icon=self._idle_icon, quit_button=None)
+        super().__init__("KubunDictate", icon=self._icon_paths["idle"], quit_button=None)
         self._rebuild_menu()
 
     def _apply_active(self):
@@ -273,10 +297,14 @@ class TrayApp(rumps.App):
     def _check_recording(self, _timer):
         # Runs on the main run loop (rumps.Timer), not a background thread
         # -- AppKit property updates like self.icon need the main thread.
-        current = client.is_recording()
-        if current != self._recording:
-            self._recording = current
-            self.icon = self._record_icon if current else self._idle_icon
+        now = time.monotonic()
+        if now - self._last_pulse >= PULSE_INTERVAL:
+            self._pulse_a = not self._pulse_a
+            self._last_pulse = now
+        state = _current_icon_state(self._pulse_a)
+        if state != self._icon_state:
+            self._icon_state = state
+            self.icon = self._icon_paths[state]
 
     def run(self):
         first_run = not self.recent
