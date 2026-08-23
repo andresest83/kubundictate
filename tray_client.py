@@ -24,6 +24,7 @@ from PIL import Image
 import pystray
 
 import client
+import win_toast
 
 MAX_RECENT = 3
 ICON_DIR = Path(__file__).resolve().parent / "images"
@@ -131,6 +132,25 @@ def _current_icon_state(pulse_a):
     if client.is_recording():
         return "listening-a" if pulse_a else "listening-b"
     return "idle"
+
+
+def _watch_toast(toast, stop_event):
+    # A separate poll from _watch_recording (not merged in) since the toast
+    # tracks activity + result transitions, not the tray icon's pulse phase
+    # -- win_toast.Toast owns its own pulse timer once shown.
+    was_active = False
+    seen_seq = 0
+    while not stop_event.is_set():
+        active = client.is_recording() or client.is_transcribing()
+        if active and not was_active:
+            toast.show_listening()
+        was_active = active
+
+        result = client.last_result
+        if result and result[2] != seen_seq:
+            seen_seq = result[2]
+            toast.show_result(result[1])
+        time.sleep(0.05)
 
 
 def _watch_recording(icon, icons, stop_event):
@@ -275,6 +295,7 @@ class TrayApp:
         self._apply_active()
         self._refresh_menu()
 
+        toast = win_toast.Toast()
         threading.Thread(
             target=lambda: client.run(self.stop_event),
             daemon=True,
@@ -282,6 +303,11 @@ class TrayApp:
         threading.Thread(
             target=_watch_recording,
             args=(self.icon, self._icons, self.stop_event),
+            daemon=True,
+        ).start()
+        threading.Thread(
+            target=_watch_toast,
+            args=(toast, self.stop_event),
             daemon=True,
         ).start()
 

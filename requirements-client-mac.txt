@@ -6,3 +6,4 @@ requests
 rumps
 Pillow
 pyobjc-framework-ApplicationServices
+pyobjc-framework-Cocoa

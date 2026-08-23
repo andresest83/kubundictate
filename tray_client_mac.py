@@ -56,6 +56,7 @@ except ImportError:
     CGRequestListenEventAccess = None
 
 import client
+import mac_toast
 
 MAX_RECENT = 3
 ICON_DIR = Path(__file__).resolve().parent / "images"
@@ -216,6 +217,11 @@ class TrayApp(rumps.App):
         super().__init__("KubunDictate", icon=self._icon_paths["idle"], quit_button=None)
         self._rebuild_menu()
 
+        self._toast = mac_toast.Toast()
+        self._toast_active = False
+        self._toast_seen_seq = 0
+        self._toast_hide_at = None
+
     def _apply_active(self):
         if self.recent:
             active = self.recent[0]
@@ -305,6 +311,27 @@ class TrayApp(rumps.App):
         if state != self._icon_state:
             self._icon_state = state
             self.icon = self._icon_paths[state]
+
+        self._update_toast(now)
+
+    def _update_toast(self, now):
+        active = client.is_recording() or client.is_transcribing()
+        if active and not self._toast_active:
+            self._toast.show_listening()
+            self._toast_hide_at = None
+        elif active:
+            self._toast.set_pulse_frame(self._pulse_a)
+        self._toast_active = active
+
+        result = client.last_result
+        if result and result[2] != self._toast_seen_seq:
+            self._toast_seen_seq = result[2]
+            self._toast.show_result(result[1])
+            self._toast_hide_at = now + 1.0
+
+        if self._toast_hide_at is not None and now >= self._toast_hide_at:
+            self._toast.hide()
+            self._toast_hide_at = None
 
     def run(self):
         first_run = not self.recent
