@@ -97,13 +97,30 @@ def normalize_url(addr):
     return f"http://{addr}"
 
 
+def _fill_frame(img, size):
+    # The source PNGs carry a few px of transparent margin around the
+    # glyph (design-grid padding). The OS fits the whole canvas -- margin
+    # included -- into the tray/menu-bar slot, so that margin is wasted
+    # space the glyph could otherwise occupy. Crop to the visible pixels
+    # and scale back up (aspect preserved) to reclaim it.
+    img = img.convert("RGBA")
+    bbox = img.getbbox()
+    if bbox:
+        img = img.crop(bbox)
+    scale = min(size / img.width, size / img.height)
+    new_size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
+    img = img.resize(new_size, Image.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.paste(img, ((size - new_size[0]) // 2, (size - new_size[1]) // 2), img)
+    return canvas
+
+
 def _load_icons():
     # pystray.Icon.icon accepts a PIL Image directly -- no temp-file dance
     # needed, unlike the mac client's rumps.App.icon. Pre-rendered per
-    # state/size in images/ (see kubundictate-icons/README.md); no
-    # runtime crop/tint required.
+    # state/size in images/ (see kubundictate-icons/README.md).
     return {
-        state: Image.open(ICON_DIR / f"kubundictate-{state}-{ICON_SIZE}.png")
+        state: _fill_frame(Image.open(ICON_DIR / f"kubundictate-{state}-{ICON_SIZE}.png"), ICON_SIZE)
         for state in ("idle", "listening-a", "listening-b")
     }
 

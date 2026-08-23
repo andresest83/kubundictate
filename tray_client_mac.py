@@ -160,6 +160,24 @@ def _request_input_monitoring_access():
         pass
 
 
+def _fill_frame(img, size):
+    # The source PNGs carry a few px of transparent margin around the
+    # glyph (design-grid padding). The OS fits the whole canvas -- margin
+    # included -- into the menu-bar slot, so that margin is wasted space
+    # the glyph could otherwise occupy. Crop to the visible pixels and
+    # scale back up (aspect preserved) to reclaim it.
+    img = img.convert("RGBA")
+    bbox = img.getbbox()
+    if bbox:
+        img = img.crop(bbox)
+    scale = min(size / img.width, size / img.height)
+    new_size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
+    img = img.resize(new_size, Image.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.paste(img, ((size - new_size[0]) // 2, (size - new_size[1]) // 2), img)
+    return canvas
+
+
 def _make_icon_file(state):
     # rumps.App.icon wants a file path, not an in-memory image like
     # pystray accepts -- render once per state and swap paths instead.
@@ -168,7 +186,7 @@ def _make_icon_file(state):
     # to the actual menu-bar render size instead of shipping a duplicate
     # 44px asset.
     src = ICON_DIR / f"kubundictate-{state}-{ICON_SOURCE_SIZE}.png"
-    resized = Image.open(src).resize((ICON_RENDER_SIZE, ICON_RENDER_SIZE), Image.LANCZOS)
+    resized = _fill_frame(Image.open(src), ICON_RENDER_SIZE)
     fd, path = tempfile.mkstemp(suffix=".png", prefix="kubundictate_icon_")
     os.close(fd)
     resized.save(path)
