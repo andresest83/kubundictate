@@ -122,12 +122,14 @@ def stop_recording_and_transcribe():
 
     if not _frames:
         print("[no audio captured]")
+        _set_result(None, "aborted")
         return
 
     audio = np.concatenate(_frames, axis=0).flatten().astype(np.float32)
     duration = len(audio) / SAMPLE_RATE
     if duration < 0.2:
         print("[clip too short, ignored]")
+        _set_result(None, "aborted")
         return
 
     print(f"[sending {duration:.1f}s of audio to {settings.server_url}...]")

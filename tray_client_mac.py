@@ -218,7 +218,7 @@ class TrayApp(rumps.App):
         self._rebuild_menu()
 
         self._toast = mac_toast.Toast()
-        self._toast_active = False
+        self._toast_phase = None  # None | "listening" | "transcribing"
         self._toast_seen_seq = 0
         self._toast_hide_at = None
 
@@ -315,19 +315,36 @@ class TrayApp(rumps.App):
         self._update_toast(now)
 
     def _update_toast(self, now):
-        active = client.is_recording() or client.is_transcribing()
-        if active and not self._toast_active:
-            self._toast.show_listening()
-            self._toast_hide_at = None
-        elif active:
+        if client.is_recording():
+            phase = "listening"
+        elif client.is_transcribing():
+            phase = "transcribing"
+        else:
+            phase = None
+
+        if phase != self._toast_phase:
+            if phase == "listening":
+                self._toast.show_listening()
+                self._toast_hide_at = None
+            elif phase == "transcribing":
+                self._toast.show_transcribing()
+                self._toast_hide_at = None
+            self._toast_phase = phase
+        elif phase == "listening":
             self._toast.set_pulse_frame(self._pulse_a)
-        self._toast_active = active
 
         result = client.last_result
         if result and result[2] != self._toast_seen_seq:
             self._toast_seen_seq = result[2]
-            self._toast.show_result(result[1])
-            self._toast_hide_at = now + 1.0
+            error = result[1]
+            # "aborted" (clip too short / no audio) isn't a real attempt
+            # worth a message -- just clear whatever's showing.
+            if error == "aborted":
+                self._toast.hide()
+            else:
+                self._toast.show_result(error)
+                self._toast_hide_at = now + 1.0
+            self._toast_phase = None
 
         if self._toast_hide_at is not None and now >= self._toast_hide_at:
             self._toast.hide()

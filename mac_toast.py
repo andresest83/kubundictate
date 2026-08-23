@@ -44,6 +44,7 @@ TOP_MARGIN = 8
 MESSAGES = {
     "listening-a": "Listening...",
     "listening-b": "Listening...",
+    "transcribing": "Transcribing...",
     "copied": "Copied to clipboard",
     "no-speech": "No speech detected",
     "error": "Couldn't reach server",
@@ -51,6 +52,9 @@ MESSAGES = {
 ICON_FOR_STATE = {
     "listening-a": "listening-a",
     "listening-b": "listening-b",
+    # Held static (no pulse), same convention as the menu-bar icon itself
+    # (_current_icon_state) while awaiting the server's response.
+    "transcribing": "listening-a",
     "copied": "idle",
     "no-speech": "idle",
     "error": "idle",
@@ -107,6 +111,9 @@ class Toast:
 
     def show_listening(self):
         self._set_state("listening-a")
+
+    def show_transcribing(self):
+        self._set_state("transcribing")
 
     def set_pulse_frame(self, pulse_a):
         # Called on every poll tick while listening -- see

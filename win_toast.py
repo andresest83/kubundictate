@@ -42,6 +42,9 @@ from PIL import Image, ImageDraw, ImageFont
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
+
+DWMWA_TRANSITIONS_FORCEDISABLED = 3
 
 ICON_DIR = Path(__file__).resolve().parent / "images"
 ICON_SIZE = 64
@@ -49,7 +52,7 @@ PULSE_INTERVAL_MS = 700
 RESULT_HOLD_MS = 1000
 TOP_MARGIN = 16
 
-CHIP_BG = (28, 28, 30, 235)  # near-opaque dark chip, alpha applied per-pixel
+CHIP_BG = (28, 28, 30, 255)  # fully opaque -- avoid any background bleed-through
 CHIP_PAD_X = 18
 CHIP_PAD_Y = 14
 GAP = 12
@@ -67,7 +70,6 @@ WS_EX_LAYERED = 0x00080000
 WS_EX_TOPMOST = 0x00000008
 WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_NOACTIVATE = 0x08000000
-SW_SHOWNOACTIVATE = 4
 SW_HIDE = 0
 ULW_ALPHA = 2
 AC_SRC_OVER = 0
@@ -248,6 +250,9 @@ def _build_frames():
     return {
         "listening-a": _compose(icons["listening-a"], "Listening...", font),
         "listening-b": _compose(icons["listening-b"], "Listening...", font),
+        # Held static (no pulse), same convention as the tray icon itself
+        # (_current_icon_state) while awaiting the server's response.
+        "transcribing": _compose(icons["listening-a"], "Transcribing...", font),
         "copied": _compose(icons["idle"], "Copied to clipboard", font),
         "no-speech": _compose(icons["idle"], "No speech detected", font),
         "error": _compose(icons["idle"], "Couldn't reach server", font),
@@ -279,10 +284,16 @@ class Toast:
     def show_listening(self):
         self._post(("listening",))
 
+    def show_transcribing(self):
+        self._post(("transcribing",))
+
     def show_result(self, error):
         # error is None for a successful "copied" outcome, else one of
         # "no-speech" / "could not reach server".
         self._post(("result", error))
+
+    def hide(self):
+        self._post(("hide",))
 
     def _post(self, item):
         if self._hwnd is None:
@@ -308,7 +319,15 @@ class Toast:
             ex_style, CLASS_NAME, "KubunDictate", WS_POPUP,
             0, 0, 1, 1, None, None, hinst, None,
         )
+        # DWM can cross-fade content changes on layered windows by default;
+        # force instant, non-blended swaps instead so pulse/state repaints
+        # never look like they're fading between frames.
+        disable = ctypes.c_int(1)
+        dwmapi.DwmSetWindowAttribute(
+            self._hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, ctypes.byref(disable), ctypes.sizeof(disable)
+        )
         self._pulse_a = True
+        self._visible = False
         self._ready.set()
 
         msg = MSG()
@@ -327,6 +346,7 @@ class Toast:
             elif wparam == TIMER_HIDE:
                 user32.KillTimer(hwnd, TIMER_HIDE)
                 user32.ShowWindow(hwnd, SW_HIDE)
+                self._visible = False
             return 0
         if message == WM_DESTROY:
             user32.PostQuitMessage(0)
@@ -343,12 +363,21 @@ class Toast:
                     self._pulse_a = True
                     self._paint(hwnd, "listening-a")
                     user32.SetTimer(hwnd, TIMER_PULSE, PULSE_INTERVAL_MS, None)
+                elif kind == "transcribing":
+                    user32.KillTimer(hwnd, TIMER_PULSE)
+                    user32.KillTimer(hwnd, TIMER_HIDE)
+                    self._paint(hwnd, "transcribing")
                 elif kind == "result":
                     user32.KillTimer(hwnd, TIMER_PULSE)
                     error = item[1]
                     state = {"no-speech": "no-speech", "could not reach server": "error"}.get(error, "copied")
                     self._paint(hwnd, state)
                     user32.SetTimer(hwnd, TIMER_HIDE, RESULT_HOLD_MS, None)
+                elif kind == "hide":
+                    user32.KillTimer(hwnd, TIMER_PULSE)
+                    user32.KillTimer(hwnd, TIMER_HIDE)
+                    user32.ShowWindow(hwnd, SW_HIDE)
+                    self._visible = False
         except queue.Empty:
             pass
 
@@ -376,10 +405,17 @@ class Toast:
         src_pt = wintypes.POINT(0, 0)
         dst_pt = wintypes.POINT(x, y)
         blend = BLENDFUNCTION(AC_SRC_OVER, 0, 255, AC_SRC_ALPHA)
+        # UpdateLayeredWindow alone repositions, resizes, and repaints the
+        # window atomically in one compositor pass -- a follow-up
+        # SetWindowPos/ShowWindow on every repaint would be redundant.
+        # SetWindowPos still runs, but only once per show (below), to
+        # establish topmost z-order and actually map the window the
+        # first time.
         user32.UpdateLayeredWindow(hwnd, screen_dc, ctypes.byref(dst_pt), ctypes.byref(size),
                                     mem_dc, ctypes.byref(src_pt), 0, ctypes.byref(blend), ULW_ALPHA)
-        user32.SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW)
-        user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE)
+        if not self._visible:
+            user32.SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW)
+            self._visible = True
 
         gdi32.SelectObject(mem_dc, old_bitmap)
         gdi32.DeleteObject(hbitmap)
