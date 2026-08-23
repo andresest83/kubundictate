@@ -29,9 +29,19 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-user32 = ctypes.windll.user32
-gdi32 = ctypes.windll.gdi32
-kernel32 = ctypes.windll.kernel32
+# Independent WinDLL handles, deliberately NOT ctypes.windll.user32 et al.
+# -- that accessor is a process-wide cache, and pynput (imported by
+# client.py) sets its own argtypes on the exact same shared GetMessageW/
+# PostMessageW/etc. function objects. Setting ours there last would
+# silently overwrite pynput's, corrupting its message loop for the rest
+# of the process's life -- confirmed hands-on: pynput swallows the
+# resulting ArgumentError with a bare `except: pass` in its listener
+# thread, so the hotkey just stops firing with no error anywhere. A
+# fresh WinDLL() call gets our own private function-wrapper objects
+# pointing at the same DLLs, so our argtypes can't leak into pynput's.
+user32 = ctypes.WinDLL("user32", use_last_error=True)
+gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
 ICON_DIR = Path(__file__).resolve().parent / "images"
 ICON_SIZE = 64
