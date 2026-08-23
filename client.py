@@ -44,6 +44,7 @@ REQUEST_TIMEOUT = 120  # seconds
 # --------------------------------------------------------------------------
 
 _recording = False
+_transcribing = False
 _frames = []
 _audio_queue = queue.Queue()
 
@@ -84,6 +85,10 @@ def is_recording():
     return _recording
 
 
+def is_transcribing():
+    return _transcribing
+
+
 def start_recording():
     global _recording, _frames
     _frames = []
@@ -95,7 +100,7 @@ def start_recording():
 
 
 def stop_recording_and_transcribe():
-    global _recording
+    global _recording, _transcribing
     _recording = False
     _drain_queue_into(_frames)
     _beep(440, 80)
@@ -114,26 +119,30 @@ def stop_recording_and_transcribe():
     wav_bytes = float32_to_wav_bytes(audio, SAMPLE_RATE)
     headers = {"Authorization": f"Bearer {settings.token}"} if settings.token else {}
 
+    _transcribing = True
     try:
-        resp = requests.post(
-            f"{settings.server_url}/transcribe",
-            files={"audio": ("clip.wav", wav_bytes, "audio/wav")},
-            headers=headers,
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        text = resp.json()["text"]
-    except requests.RequestException as e:
-        print(f"[error: could not reach server: {e}]")
-        _beep(220, 200)
-        return
+        try:
+            resp = requests.post(
+                f"{settings.server_url}/transcribe",
+                files={"audio": ("clip.wav", wav_bytes, "audio/wav")},
+                headers=headers,
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            text = resp.json()["text"]
+        except requests.RequestException as e:
+            print(f"[error: could not reach server: {e}]")
+            _beep(220, 200)
+            return
 
-    if text:
-        pyperclip.copy(text)
-        print(f'"{text}"  (copied to clipboard)')
-        _beep(1200, 60)
-    else:
-        print("[no speech detected]")
+        if text:
+            pyperclip.copy(text)
+            print(f'"{text}"  (copied to clipboard)')
+            _beep(1200, 60)
+        else:
+            print("[no speech detected]")
+    finally:
+        _transcribing = False
 
 
 def run(stop_event):
