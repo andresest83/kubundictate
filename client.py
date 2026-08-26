@@ -48,6 +48,21 @@ _transcribing = False
 _frames = []
 _audio_queue = queue.Queue()
 
+# Set once per finished transcription attempt (success, no-speech, or
+# request error) -- (text_or_None, error_or_None, sequence_number).
+# GUI clients already poll is_recording()/is_transcribing() on a timer for
+# icon state (#8); this is the same pattern, not a callback, so it stays
+# free of any GUI-thread-affinity assumptions. The sequence number lets a
+# poller detect a *new* result even when text/error repeats.
+last_result = None
+_result_seq = 0
+
+
+def _set_result(text, error):
+    global last_result, _result_seq
+    _result_seq += 1
+    last_result = (text, error, _result_seq)
+
 
 def _on_audio(indata, frames_count, time_info, status):
     if _recording:
@@ -107,12 +122,14 @@ def stop_recording_and_transcribe():
 
     if not _frames:
         print("[no audio captured]")
+        _set_result(None, "aborted")
         return
 
     audio = np.concatenate(_frames, axis=0).flatten().astype(np.float32)
     duration = len(audio) / SAMPLE_RATE
     if duration < 0.2:
         print("[clip too short, ignored]")
+        _set_result(None, "aborted")
         return
 
     print(f"[sending {duration:.1f}s of audio to {settings.server_url}...]")
@@ -133,14 +150,17 @@ def stop_recording_and_transcribe():
         except requests.RequestException as e:
             print(f"[error: could not reach server: {e}]")
             _beep(220, 200)
+            _set_result(None, "could not reach server")
             return
 
         if text:
             pyperclip.copy(text)
             print(f'"{text}"  (copied to clipboard)')
             _beep(1200, 60)
+            _set_result(text, None)
         else:
             print("[no speech detected]")
+            _set_result(None, "no speech detected")
     finally:
         _transcribing = False
 

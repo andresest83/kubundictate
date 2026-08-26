@@ -56,6 +56,7 @@ except ImportError:
     CGRequestListenEventAccess = None
 
 import client
+import mac_toast
 
 MAX_RECENT = 3
 ICON_DIR = Path(__file__).resolve().parent / "images"
@@ -216,6 +217,11 @@ class TrayApp(rumps.App):
         super().__init__("KubunDictate", icon=self._icon_paths["idle"], quit_button=None)
         self._rebuild_menu()
 
+        self._toast = mac_toast.Toast()
+        self._toast_phase = None  # None | "listening" | "transcribing"
+        self._toast_seen_seq = 0
+        self._toast_hide_at = None
+
     def _apply_active(self):
         if self.recent:
             active = self.recent[0]
@@ -305,6 +311,44 @@ class TrayApp(rumps.App):
         if state != self._icon_state:
             self._icon_state = state
             self.icon = self._icon_paths[state]
+
+        self._update_toast(now)
+
+    def _update_toast(self, now):
+        if client.is_recording():
+            phase = "listening"
+        elif client.is_transcribing():
+            phase = "transcribing"
+        else:
+            phase = None
+
+        if phase != self._toast_phase:
+            if phase == "listening":
+                self._toast.show_listening()
+                self._toast_hide_at = None
+            elif phase == "transcribing":
+                self._toast.show_transcribing()
+                self._toast_hide_at = None
+            self._toast_phase = phase
+        elif phase == "listening":
+            self._toast.set_pulse_frame(self._pulse_a)
+
+        result = client.last_result
+        if result and result[2] != self._toast_seen_seq:
+            self._toast_seen_seq = result[2]
+            error = result[1]
+            # "aborted" (clip too short / no audio) isn't a real attempt
+            # worth a message -- just clear whatever's showing.
+            if error == "aborted":
+                self._toast.hide()
+            else:
+                self._toast.show_result(error)
+                self._toast_hide_at = now + 1.0
+            self._toast_phase = None
+
+        if self._toast_hide_at is not None and now >= self._toast_hide_at:
+            self._toast.hide()
+            self._toast_hide_at = None
 
     def run(self):
         first_run = not self.recent

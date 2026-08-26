@@ -9,6 +9,7 @@ folder needed once it's set up). Run via start_tray.bat (pythonw.exe,
 no console window).
 """
 
+import ctypes
 import json
 import os
 import re
@@ -24,6 +25,7 @@ from PIL import Image
 import pystray
 
 import client
+import win_toast
 
 MAX_RECENT = 3
 ICON_DIR = Path(__file__).resolve().parent / "images"
@@ -131,6 +133,41 @@ def _current_icon_state(pulse_a):
     if client.is_recording():
         return "listening-a" if pulse_a else "listening-b"
     return "idle"
+
+
+def _watch_toast(toast, stop_event):
+    # A separate poll from _watch_recording (not merged in) since the toast
+    # tracks activity + result transitions, not the tray icon's pulse phase
+    # -- win_toast.Toast owns its own pulse timer once shown.
+    last_phase = None  # None | "listening" | "transcribing"
+    seen_seq = 0
+    while not stop_event.is_set():
+        if client.is_recording():
+            phase = "listening"
+        elif client.is_transcribing():
+            phase = "transcribing"
+        else:
+            phase = None
+
+        if phase != last_phase:
+            if phase == "listening":
+                toast.show_listening()
+            elif phase == "transcribing":
+                toast.show_transcribing()
+            last_phase = phase
+
+        result = client.last_result
+        if result and result[2] != seen_seq:
+            seen_seq = result[2]
+            error = result[1]
+            # "aborted" (clip too short / no audio) isn't a real attempt
+            # worth a message -- just clear whatever's showing.
+            if error == "aborted":
+                toast.hide()
+            else:
+                toast.show_result(error)
+            last_phase = None
+        time.sleep(0.05)
 
 
 def _watch_recording(icon, icons, stop_event):
@@ -275,6 +312,7 @@ class TrayApp:
         self._apply_active()
         self._refresh_menu()
 
+        toast = win_toast.Toast()
         threading.Thread(
             target=lambda: client.run(self.stop_event),
             daemon=True,
@@ -284,11 +322,40 @@ class TrayApp:
             args=(self.icon, self._icons, self.stop_event),
             daemon=True,
         ).start()
+        threading.Thread(
+            target=_watch_toast,
+            args=(toast, self.stop_event),
+            daemon=True,
+        ).start()
 
         self.icon.run(setup=self._on_ready)
 
 
+def _enable_dpi_awareness():
+    # Without this, Windows treats the process as DPI-unaware and
+    # bitmap-stretches every window it creates (tray icon, dialogs, the
+    # toast) to match the display's scale factor instead of rendering
+    # natively -- soft/blurry edges on anything but 100% scaling. Must
+    # run before any window is created, so this is the first thing
+    # main() does. Independent WinDLL handles, not ctypes.windll --
+    # see win_toast.py's comment on why that accessor is unsafe to
+    # mutate shared state on (not the concern for a single one-off call
+    # like this, but keeping the habit consistent).
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    try:
+        # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, Windows 10 1703+.
+        if user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except (AttributeError, OSError):
+        pass
+    try:
+        ctypes.WinDLL("shcore", use_last_error=True).SetProcessDpiAwareness(2)
+    except (AttributeError, OSError):
+        pass
+
+
 def main():
+    _enable_dpi_awareness()
     TrayApp().run()
 
 
