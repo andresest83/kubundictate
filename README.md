@@ -2,318 +2,159 @@
 
 ![KubunDictate architecture](images/kubundictate-architecture.png)
 
-Local, offline push-to-talk dictation: hold a hotkey, talk, release it,
-and the transcription is copied to your clipboard so you can paste
-(Ctrl+V) it wherever you want. Runs entirely offline (no cloud API calls)
-via [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
+**TL;DR:** Hold a key, talk, let go, and your words land on your
+clipboard, ready to paste anywhere. It runs entirely on your own hardware: no
+cloud, no accounts, nothing leaves your network. One computer with a
+graphics card does the actual transcribing; any other Windows PC or
+Mac on the same network can use it. Windows and Mac are both done and
+working today.
 
-Two independent roles, each with its own installer:
+## What you need
 
-- **server** -- runs once, on a machine with an NVIDIA GPU. Loads the
-  Whisper model and keeps it resident in VRAM, exposing a transcription
-  endpoint over HTTP.
-- **client** -- runs on any Windows PC or Mac on your LAN (including the
-  server box itself, if you also want to dictate there), as a
-  tray/menu-bar icon. Handles the hotkey, records your mic, sends the
-  audio to the server, and copies the returned text to your clipboard.
-  No GPU or model download required.
+- **One PC with an NVIDIA graphics card.** This is the "server": it
+  does the transcribing. Set it up once.
+- **Any number of other computers** (Windows or Mac) to actually talk
+  into day to day: these are "clients." No graphics card needed. You
+  can also use the server PC itself as a client.
 
-## Status
+## Set up the server (the PC with the graphics card)
 
-- **Windows client/server**: working. Server on the GPU box, thin
-  clients on any Windows PC on the LAN.
-- **Runs unattended at boot**: working, via a Windows Scheduled Task
-  (see "Run as a service" below) -- verified surviving a reboot with no
-  one logged in.
-- **Mac client**: working, verified end-to-end on the target hardware
-  (macOS Tahoe, Apple M3 Max) -- see "Client (macOS)" below and
-  [issue #24](https://github.com/andresest83/kubundictate/issues/24).
-- **Android client**: planned, not started.
-
-## Setup
-
-### Quick install
-
-After `git clone`, run the installer for whichever role this machine
-plays:
+Open PowerShell as Administrator, then from this folder:
 
 ```
-install_server.ps1   REM the GPU box -- needs an elevated (Administrator) PowerShell
-install_client.ps1   REM any other Windows PC -- no elevation needed
+install_server.ps1
 ```
 
-`install_server.ps1` creates the venv, installs the server
-dependencies, writes `config.bat`, provisions the Windows Firewall
-rule, and can register the startup service. `install_client.ps1`
-creates the venv and installs the tray app's dependencies --
-`start_tray.bat` asks for the server's address itself the first time
-it runs, no `config.bat` needed.
-
-On a Mac, use `install_client_mac.sh` instead -- see "Client (macOS)"
-below. The server is Windows-only (needs the NVIDIA GPU box).
-
-Want to dictate directly on the GPU box too? Run `install_client.ps1`
-there as well, same as any other machine -- point it at
-`localhost:<port>` when it asks for a server address.
-
-Re-running either is safe -- both skip venv creation if one already
-exists, and `install_server.ps1` asks before overwriting an existing
-`config.bat`.
-
-### Manual setup
+It asks a few quick questions (port, which speech model, an optional
+shared password) and sets everything up. Then start it:
 
 ```
-python -m venv venv
-venv\Scripts\pip install -r requirements-server.txt   REM on the GPU box
-venv\Scripts\pip install -r requirements-client.txt   REM on any other Windows PC
+start_server.bat
 ```
 
+The first run downloads the speech model (a few GB). That only
+happens once. Leave this running; it's what your clients talk to.
+
+Want it to start on its own every time this PC turns on? See
+[Start the server automatically](#start-the-server-automatically) below.
+
+## Set up a client (any other computer)
+
+**Windows:**
+
 ```
-python3 -m venv venv
-venv/bin/pip install -r requirements-client-mac.txt   # on a Mac
+install_client.ps1
+start_tray.bat
 ```
 
-For the server, copy `config.bat.example` to `config.bat` and fill in
-the values (see [Configuration](#configuration) below) -- `config.bat`
-is gitignored, so each machine keeps its own local settings. Neither
-client uses `config.bat`; skip straight to running `start_tray.bat`
-(Windows) or `start_tray_mac.sh` (macOS), described below.
-
-### Server (the GPU box)
-
-Run `start_server.bat`. First run downloads the model (~1.6GB for
-`large-v3-turbo`) to the Hugging Face cache. Leave it running -- it's a
-resident process serving requests on `KUBUNDICTATE_PORT` (default 50505).
-
-### Client (any Windows PC, including the GPU box itself)
-
-Run `start_tray.bat` (no console window -- just an icon in the system
-tray). First run asks for the server's address (LAN IP or Tailscale IP,
-or `localhost:<port>` if this is the server's own box) and, if the
-server has one, its shared token. Settings are saved to
-`%APPDATA%\KubunDictate\client_settings.json`, which remembers the
-last 3 servers you've used -- right-click the tray icon to switch
-between them or enter a new one.
-
-- Hold **F9** to record, release to transcribe. The text lands on the
-  clipboard automatically -- paste it with Ctrl+V anywhere.
-- The tray icon changes color while recording.
-- A short beep marks start/stop of recording, a higher beep marks a
-  successful transcription, and a low beep marks a failed request (e.g.
-  server unreachable).
-- Right-click the tray icon -> **Quit** to exit.
-- Right-click -> **Run at startup** to toggle launching automatically at
-  login (adds/removes a `pythonw.exe start_tray.bat`-equivalent entry
-  under the current user's Registry Run key). Off by default -- launch
-  `start_tray.bat` manually otherwise.
-
-### Client (macOS)
-
-Menu-bar equivalent of the Windows tray client (issue
-[#24](https://github.com/andresest83/kubundictate/issues/24)), same
-record/transcribe engine underneath. From this folder (Terminal, no
-elevation needed):
+**Mac:**
 
 ```
 ./install_client_mac.sh
 ./start_tray_mac.sh
 ```
 
-First launch asks for the server's address (LAN IP or Tailscale IP, or
-`localhost:<port>` if this is the server's own box) and, if the server
-has one, its shared token. Settings are saved to `~/Library/Application
-Support/KubunDictate/client_settings.json`, remembering the last 3
-servers you've used -- click the menu-bar icon to switch between them or
-enter a new one.
+The first time it runs, it asks for the server's address: just the
+IP address of the server PC on your network (or `localhost` if this
+is the same computer as the server).
 
-- Hold **Left Option** to record, release to transcribe. The text lands
-  on the clipboard automatically -- paste it with Cmd+V anywhere. (Not
-  F9: bare F-keys on a Mac keyboard default to hardware/media functions,
-  so a single unmodified key that doesn't collide with anything was a
-  better default than requiring fn+F9 held together.)
-- The menu-bar icon changes color while recording.
-- A short tone marks start/stop of recording, a higher tone marks a
-  successful transcription, and a low tone marks a failed request.
-- Click the menu-bar icon -> **Quit** to exit.
-- Click -> **Run at login** to toggle launching automatically at login
-  (adds/removes a LaunchAgent under `~/Library/LaunchAgents/`). Off by
-  default -- launch `start_tray_mac.sh` manually otherwise.
-- **First launch needs two separate permissions for the hotkey to
-  work**, both under System Settings -> Privacy & Security: **Accessibility**
-  and **Input Monitoring** (labeled *Eingabeuberwachung* if your Mac is in
-  German -- confirmed hands-on that the English/German mismatch cost real
-  time here, worth knowing up front on a localized system). These are
-  independent TCC categories: Accessibility silences pynput's internal
-  trust check, but actual key events flow through `CGEventTapCreate`,
-  which is gated separately by Input Monitoring -- Accessibility alone
-  left the hotkey listener receiving nothing at all, for any key, not
-  just the hotkey. The app proactively triggers macOS's native dialog for
-  *both* on first launch (`_request_accessibility_trust` and
-  `_request_input_monitoring_access` in `tray_client_mac.py`) -- normally
-  just click **Allow**/**Open System Settings** on each, then **quit and
-  relaunch** (granting doesn't retroactively apply to the already-running
-  process).
-  - If a permission dialog doesn't list your Terminal app under a given
-    category yet, add it via **+** -- but add the **Terminal app itself**
-    (Terminal.app, iTerm, etc.), not `python3`: macOS attributes
-    permission for a script launched from Terminal to Terminal as the
-    "responsible process," and the file picker won't even let you select
-    a raw binary like the venv's `python3` (only real `.app` bundles are
-    selectable there).
-  - If the hotkey still does nothing and the clipboard never updates
-    after granting both and relaunching, run `venv/bin/python3
-    tray_client_mac.py` directly (not via `start_tray_mac.sh`) to see
-    errors printed to the terminal instead of only into
-    `kubundictate.log`.
-- Microphone access is also required and does prompt natively the
-  first time recording is attempted.
+On a Mac, the first launch also asks for two permissions
+(**Accessibility** and **Input Monitoring**, under System Settings →
+Privacy & Security). Click Allow for both, then quit and reopen the
+app once, since permissions only take effect after a restart. If your Mac
+is set to German, these are labeled *Bedienungshilfen* and
+*Eingabeüberwachung*.
 
-Verified end-to-end on the target hardware (macOS Tahoe, Apple M3 Max)
--- see issue #24.
+## Using it
 
-## Run as a service (Windows startup, no login required)
+- Hold **F9** (Windows) or **Left Option** (Mac) to record, let go to
+  transcribe. Left Option is used on Mac because F-keys default to
+  media controls there.
+- The text lands on your clipboard automatically. Paste it anywhere
+  with Ctrl+V (Cmd+V on Mac).
+- A small popup near the top of your screen and a short sound confirm
+  what's happening: listening, working, done.
+- Right-click the tray icon (Windows) or click the menu-bar icon (Mac)
+  for more: switch between recent servers, enter a new one, or turn on
+  "run automatically at startup."
 
-To have the server come up at boot -- before any login, and stay up
-across logout -- register it as a scheduled task:
+## Start the server automatically
+
+To have the server come up on its own at boot, even before anyone logs
+in, from an **Administrator** PowerShell:
 
 ```
 install_server_service.ps1
 ```
 
-Run from an **elevated** (Administrator) PowerShell. It registers a
-Scheduled Task named `KubunDictateServer` that runs
-`start_server_hidden.bat` at startup as `NT AUTHORITY\SYSTEM`, with
-automatic restart on failure. Requires `install_server.ps1` to have
-already been run in this folder (`config.bat` present).
-
-- Start it immediately without rebooting: `Start-ScheduledTask -TaskName KubunDictateServer`
-- Logs: same `kubundictate.log` as `start_server_hidden.bat`
-- Remove it: `uninstall_server_service.ps1` (also elevated)
-
-This uses Task Scheduler rather than a "real" Windows service (no new
-dependencies, reuses the existing hidden launcher) -- close enough for a
-single-user home GPU box. A `pywin32`-based service remains an option
-later if `services.msc` integration is ever actually needed.
-
-### Check status
+Check whether it's running any time with:
 
 ```
 status_server.ps1
 ```
 
-No elevation needed -- run it from any PowerShell prompt on the server
-box. Reports whether the scheduled task is running and whether the
-server is actually answering requests (`/health`), in one summary
-instead of two separate things to remember.
+Turn it off again with `uninstall_server_service.ps1`.
 
-## Configuration
+## Starting fresh
 
-The tray client doesn't use `config.bat` at all -- its server
-address/token are set through its own first-run prompt and tray menu,
-stored in `%APPDATA%\KubunDictate\client_settings.json`. These apply
-to the server only (`config.bat`, written by `install_server.ps1`):
+If something's acting up and you want a clean slate for a client:
 
-- `KUBUNDICTATE_HOST` -- bind address. Default `0.0.0.0`.
-- `KUBUNDICTATE_PORT` -- port. Default `50505`.
-- `KUBUNDICTATE_MODEL` -- faster-whisper model size/name. Default
-  `large-v3-turbo`. Smaller/faster options: `distil-large-v3`,
-  `medium`, `small`. See
-  [available models](https://github.com/SYSTRAN/faster-whisper#model-conversion).
-- `KUBUNDICTATE_LANGUAGE` -- force a language code (e.g. `en`) to skip
-  auto-detection and speed things up slightly. Default: auto-detect.
-- `KUBUNDICTATE_TOKEN` -- shared secret. If set on the server, clients
-  must send the same value or requests are rejected. Optional, **off
-  by default** -- `install_server.ps1` prompts: Enter for none,
-  `generate` for a strong random one, or type your own (8+ chars,
-  needs a letter, a number, and one of `-_.~+`). That character set is
-  deliberately narrow: `config.bat` is `call`ed by `cmd.exe`, which
-  treats `%` and `^` (among others) as special and silently corrupts
-  them, desyncing the server's real token from what clients were told
-  -- happened once, not fun to debug, so the generator and the
-  strength check both stick to characters that are inert in a batch
-  file. If you do set one, it's printed prominently (and saved to
-  `server-token.txt`, gitignored) so you can enter it into each
-  client's tray icon (right-click -> Enter new server...). Worth
-  setting if you're not sure who else is on your LAN; a trusted home
-  network or Tailscale-only setup is a reasonable case to leave it off.
+```
+uninstall_client.ps1     REM Windows
+./uninstall_client_mac.sh   # Mac
+```
 
-To change the hotkey, edit `HOTKEY` in `client.py` (uses
-[pynput](https://pynput.readthedocs.io/en/latest/keyboard.html#pynput.keyboard.Key) key names).
+This removes everything the installer set up (but never anything the
+server needs, even if you run both roles on the same machine). Run
+the install command again afterward for a genuine fresh start.
 
-## Remote access
+## Using it away from home
 
-Reachable on your LAN by default. For access from outside your LAN, use
-[Tailscale](https://tailscale.com/) on both the server and client machines
-and point the tray client at the server's Tailscale IP -- no other WAN
-exposure is supported or recommended.
+Works on your home network automatically. To reach it from elsewhere
+(say, a laptop out and about), install [Tailscale](https://tailscale.com/)
+on both the server and client, and point the client at the server's
+Tailscale address instead. Nothing else needs to be opened up to the
+internet.
 
-## Why not whisper-writer?
+## Settings
 
-The initial plan was to wrap [whisper-writer](https://github.com/savbell/whisper-writer),
-an existing open-source app that already does hotkey-record-transcribe and
-also auto-types the result into the focused window. Once it was clear the
-actual requirement was simpler -- just put the text on the clipboard and
-paste it manually, not auto-type into arbitrary apps -- whisper-writer's
-extra machinery (window-focus tracking, simulated keystroke injection,
-its own config/UI layer) stopped earning its keep. This project is built
-directly on faster-whisper + sounddevice + pynput + pyperclip + FastAPI
-instead: fewer dependencies, easier to read and modify, and no behavior
-beyond what's actually needed.
+- **Server:** edit `config.bat` in the server's folder: port, which
+  speech model to use, and an optional shared password if you want to
+  restrict who can use it (off by default; fine to leave off on a
+  trusted home network).
+- **Client:** everything's in the tray/menu-bar icon. No file to
+  edit.
 
-## Hardware notes (server)
+## Why not just use an existing tool?
 
-Tuned for an RTX 5060 Ti (Blackwell, 16GB VRAM). Two Blackwell-specific
-things matter here:
+The starting point was [whisper-writer](https://github.com/savbell/whisper-writer),
+which already does hotkey-record-transcribe and also auto-types the
+result into whatever app is focused. Once it was clear that "put it on
+the clipboard, paste it yourself" was actually enough, whisper-writer's
+extra machinery for auto-typing stopped earning its keep, so this
+project is a smaller, purpose-built alternative instead.
 
-1. `compute_type` is hardcoded to `float16` in `server.py`. CTranslate2's
-   default/int8 path crashes on RTX 50-series GPUs with
-   `CUBLAS_STATUS_NOT_SUPPORTED` -- float16 is the known-good workaround.
-2. `server.py` adds the `nvidia-cublas-cu12`/`nvidia-cudnn-cu12` pip
-   packages' DLL directories to `PATH` at import time, since CTranslate2
-   needs cuBLAS/cuDNN on Windows and doesn't bundle them itself.
+## A note on the server's graphics card
 
-`large-v3-turbo` comfortably fits in 16GB VRAM with room to spare (~2-3GB
-used at rest). If you ever run the server alongside something else that's
-VRAM-hungry, drop to `distil-large-v3` or `medium` via `KUBUNDICTATE_MODEL`.
+The default speech model comfortably fits on a 16GB graphics card with
+room to spare. If you're also running something else that uses a lot
+of graphics memory, switch to a smaller/faster model via
+`KUBUNDICTATE_MODEL` in `config.bat` (`distil-large-v3` or `medium`
+use noticeably less).
 
-## Files
+## Project files
 
-- `server.py` -- FastAPI transcription server (GPU box), entrypoint
-- `client.py` -- hotkey/record/clipboard engine, imported by
-  `tray_client.py` (not a standalone entrypoint)
-- `tray_client.py` -- Windows system-tray client entrypoint: `client.py`'s
-  engine plus the tray icon/menu and the recent-servers settings file
-  (see "Client")
-- `tray_client_mac.py` -- macOS menu-bar client entrypoint: same
-  `client.py` engine, `rumps` instead of `pystray`/winreg/tkinter (see
-  "Client (macOS)")
-- `audio.py` -- shared WAV<->float32 conversion helpers
-- `venv/` -- self-contained Python virtual environment (not committed)
-- `install_server.ps1` -- one-shot server setup: venv, dependencies,
-  `config.bat`, firewall rule, and (optionally) the startup service
-  (see "Quick install")
-- `install_client.ps1` -- one-shot Windows client setup: venv,
-  dependencies (see "Quick install")
-- `uninstall_client.ps1` -- removes the Windows client's local state:
-  venv, settings, and the "Run at startup" Registry entry, for a
-  genuine clean-slate reinstall
-- `install_client_mac.sh` -- one-shot macOS client setup: venv,
-  dependencies (see "Client (macOS)")
-- `uninstall_client_mac.sh` -- removes the macOS client's local state:
-  venv, settings, LaunchAgent, and resets the Accessibility/Input
-  Monitoring permission grants, for a genuine clean-slate reinstall
-- `start_tray_mac.sh` -- launches the macOS menu-bar client, detached
-  from the calling terminal
-- `start_server.bat` / `start_server_hidden.bat` -- server launchers
-  (foreground / headless-and-logged)
-- `start_tray.bat` -- launches the tray client (`pythonw.exe`, no
-  console window)
-- `install_server_service.ps1` / `uninstall_server_service.ps1` --
-  register/remove the server as a Scheduled Task that runs at boot
-  (see "Run as a service")
-- `status_server.ps1` -- one-command server status check: scheduled
-  task state + a live `/health` hit (see "Check status")
-- `config.bat.example` -- template for the server's settings (copy to
-  `config.bat`, which is gitignored)
-- `requirements-server.txt` / `requirements-client.txt` /
-  `requirements-client-mac.txt` -- pip dependencies for each role
+| File | What it's for |
+|---|---|
+| `server.py` | The server program |
+| `client.py` | Shared recording/transcribing logic used by both clients |
+| `tray_client.py` | Windows tray client |
+| `tray_client_mac.py` | Mac menu-bar client |
+| `install_server.ps1` / `install_client.ps1` | One-time Windows setup for each role |
+| `uninstall_client.ps1` | Removes a Windows client's local setup |
+| `install_client_mac.sh` / `uninstall_client_mac.sh` | Same, for Mac |
+| `start_server.bat` / `start_tray.bat` / `start_tray_mac.sh` | Everyday launchers |
+| `install_server_service.ps1` / `uninstall_server_service.ps1` | Start the server automatically at boot |
+| `status_server.ps1` | One-command check: is the server up? |
+| `config.bat.example` | Template for the server's settings |
+| `requirements-*.txt` | The pip packages each role needs |
