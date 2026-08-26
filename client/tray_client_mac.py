@@ -6,7 +6,7 @@ macOS equivalent of tray_client.py (which is Windows-only: pystray,
 winreg, tkinter). Settings (recent servers + their tokens) live in
 ~/Library/Application Support/KubunDictate/client_settings.json -- the
 mac analogue of tray_client.py's %APPDATA% location. Run via
-start_tray_mac.sh.
+mac/start_tray.sh.
 
 The global hotkey listener (pynput) needs TWO separate macOS
 permissions, confirmed hands-on rather than assumed: Accessibility
@@ -59,7 +59,7 @@ import client
 import mac_toast
 
 MAX_RECENT = 3
-ICON_DIR = Path(__file__).resolve().parent / "images"
+ICON_DIR = Path(__file__).resolve().parent / "icons"
 ICON_SOURCE_SIZE = 48  # nearest pre-rendered size at/above ICON_RENDER_SIZE
 ICON_RENDER_SIZE = 44  # @2x for a 22pt menu-bar icon
 PULSE_INTERVAL = 0.7  # seconds between listening-a/listening-b swaps
@@ -182,7 +182,7 @@ def _fill_frame(img, size):
 def _make_icon_file(state):
     # rumps.App.icon wants a file path, not an in-memory image like
     # pystray accepts -- render once per state and swap paths instead.
-    # Pre-rendered per state/size in images/ (see
+    # Pre-rendered per state/size in icons/ (see
     # kubundictate-icons/README.md); resize the nearest source size down
     # to the actual menu-bar render size instead of shipping a duplicate
     # 44px asset.

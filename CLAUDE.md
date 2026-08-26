@@ -271,6 +271,42 @@ per issue:
   `tray_client.py` still draws a plain colored dot via
   `_make_icon_image`. Simpler on Windows even -- `pystray.Icon.icon`
   takes a PIL `Image` directly, no temp-file path needed like rumps.
+- [#44](https://github.com/andresest83/kubundictate/issues/44)
+  **Reorganize repo: group files by role** (`priority: low`) -- 26+
+  files sat flat at the repo root, which read as disorganized for a
+  portfolio repo even though the naming convention made it navigable.
+  Scoped originally as platform-first (`windows/`, `mac/`), but that
+  was the wrong axis: it would have scattered server files across a
+  platform folder while a `server/` folder held the rest. Settled on
+  **role-first**: `server/` (flat -- the server is Windows-only, so
+  platform nesting would be dead weight) and `client/` with
+  `windows/` + `mac/` nested under it, since the client genuinely has
+  two platforms. Root drops to README/CLAUDE/LICENSE/.gitattributes
+  plus `server/`, `client/`, `docs/`.
+  - `requirements-*.txt` moved in with their role -- they were never
+    shared, and leaving them at the root was an unexamined default.
+  - `audio.py` split per side: `float32_to_wav_bytes` to
+    `client/audio.py`, `wav_bytes_to_float32` to `server/audio.py`.
+    They looked shared but each function was only ever called by one
+    side, so there was no real dependency to break. Each half's
+    docstring points at the other, since the two define one wire
+    format and have to stay in sync.
+  - `images/` split by owner: the 16 tray/toast PNGs to
+    `client/icons/` (renamed from `images` to avoid two folders of
+    that name, so `ICON_DIR` moved with them), the architecture
+    diagram to `docs/`.
+  - The `venv/` stays at the root, deliberately: it's the one thing
+    genuinely shared between the two roles on the GPU box.
+  - Added `.gitattributes` pinning `*.sh` to `eol=lf` and
+    `*.bat`/`*.ps1` to `eol=crlf`. The repo previously relied on each
+    machine's `core.autocrlf`; a Mac client checked out with CRLF
+    fails on `bad interpreter: /usr/bin/env bash^M`.
+  - Two migration hazards, both Windows: the boot-time Scheduled Task
+    stores the launcher's absolute path, so `server/install_service.ps1`
+    must be re-run after the move or the server silently stops coming
+    up at boot; and `client/windows/uninstall.ps1`'s shared-venv guard
+    now keys off `server\config.bat`, which must resolve or the guard
+    never fires and the script deletes the server's dependencies.
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option

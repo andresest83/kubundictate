@@ -20,7 +20,7 @@ if ($task) {
     Write-Output "Scheduled task '$taskName': $($task.State)"
 } else {
     # Get-ScheduledTask silently omits tasks it can't read -- e.g. this
-    # one, registered to run as SYSTEM (install_server_service.ps1) so it
+    # one, registered to run as SYSTEM (install_service.ps1) so it
     # can start before login -- instead of erroring, so an empty result
     # here doesn't prove the task is actually missing. schtasks.exe is
     # more honest about *why* it found nothing: "Access is denied" means
@@ -30,7 +30,7 @@ if ($task) {
     if ($schtasksOutput -match "Access is denied") {
         Write-Output "Scheduled task '$taskName': registered (likely running as SYSTEM), but this session can't read its live state -- re-run as Administrator for that, or trust the health check below."
     } else {
-        Write-Output "Scheduled task '$taskName': not registered (run install_server_service.ps1 to set it up)"
+        Write-Output "Scheduled task '$taskName': not registered (run server\install_service.ps1 to set it up)"
     }
 }
 

@@ -1,6 +1,6 @@
 # KubunDictate
 
-![KubunDictate architecture](images/kubundictate-architecture.png)
+![KubunDictate architecture](docs/kubundictate-architecture.png)
 
 **TL;DR:** Hold a key, talk, let go, and your words land on your
 clipboard, ready to paste anywhere. It runs entirely on your own hardware: no
@@ -22,14 +22,14 @@ working today.
 Open PowerShell as Administrator, then from this folder:
 
 ```
-install_server.ps1
+server\install.ps1
 ```
 
 It asks a few quick questions (port, which speech model, an optional
 shared password) and sets everything up. Then start it:
 
 ```
-start_server.bat
+server\start.bat
 ```
 
 The first run downloads the speech model (a few GB). That only
@@ -43,15 +43,15 @@ Want it to start on its own every time this PC turns on? See
 **Windows:**
 
 ```
-install_client.ps1
-start_tray.bat
+client\windows\install.ps1
+client\windows\start_tray.bat
 ```
 
 **Mac:**
 
 ```
-./install_client_mac.sh
-./start_tray_mac.sh
+./client/mac/install.sh
+./client/mac/start_tray.sh
 ```
 
 The first time it runs, it asks for the server's address: just the
@@ -84,24 +84,29 @@ To have the server come up on its own at boot, even before anyone logs
 in, from an **Administrator** PowerShell:
 
 ```
-install_server_service.ps1
+server\install_service.ps1
 ```
 
 Check whether it's running any time with:
 
 ```
-status_server.ps1
+server\status.ps1
 ```
 
-Turn it off again with `uninstall_server_service.ps1`.
+Turn it off again with `server\uninstall_service.ps1`.
+
+If you ever move the project folder somewhere else, re-run
+`server\install_service.ps1` afterwards: the startup entry remembers the
+old location, so the server would otherwise quietly fail to come up at
+boot.
 
 ## Starting fresh
 
 If something's acting up and you want a clean slate for a client:
 
 ```
-uninstall_client.ps1     REM Windows
-./uninstall_client_mac.sh   # Mac
+client\windows\uninstall.ps1   REM Windows
+./client/mac/uninstall.sh      # Mac
 ```
 
 This removes everything the installer set up (but never anything the
@@ -118,10 +123,9 @@ internet.
 
 ## Settings
 
-- **Server:** edit `config.bat` in the server's folder: port, which
-  speech model to use, and an optional shared password if you want to
-  restrict who can use it (off by default; fine to leave off on a
-  trusted home network).
+- **Server:** edit `server\config.bat`: port, which speech model to use,
+  and an optional shared password if you want to restrict who can use it
+  (off by default; fine to leave off on a trusted home network).
 - **Client:** everything's in the tray/menu-bar icon. No file to
   edit.
 
@@ -139,22 +143,52 @@ project is a smaller, purpose-built alternative instead.
 The default speech model comfortably fits on a 16GB graphics card with
 room to spare. If you're also running something else that uses a lot
 of graphics memory, switch to a smaller/faster model via
-`KUBUNDICTATE_MODEL` in `config.bat` (`distil-large-v3` or `medium`
-use noticeably less).
+`KUBUNDICTATE_MODEL` in `server\config.bat` (`distil-large-v3` or
+`medium` use noticeably less).
 
 ## Project files
+
+Files are grouped by role: `server/` is everything the GPU box needs,
+`client/` is everything a machine you dictate from needs. You only ever
+touch one of them per machine (or both, if one PC does both jobs).
+
+```
+server/          the transcribing end -- Windows only
+client/          the dictating end
+  windows/       Windows-specific setup + launcher
+  mac/           Mac-specific setup + launcher
+docs/            diagrams used by this README
+```
+
+**`server/`**
 
 | File | What it's for |
 |---|---|
 | `server.py` | The server program |
-| `client.py` | Shared recording/transcribing logic used by both clients |
-| `tray_client.py` | Windows tray client |
-| `tray_client_mac.py` | Mac menu-bar client |
-| `install_server.ps1` / `install_client.ps1` | One-time Windows setup for each role |
-| `uninstall_client.ps1` | Removes a Windows client's local setup |
-| `install_client_mac.sh` / `uninstall_client_mac.sh` | Same, for Mac |
-| `start_server.bat` / `start_tray.bat` / `start_tray_mac.sh` | Everyday launchers |
-| `install_server_service.ps1` / `uninstall_server_service.ps1` | Start the server automatically at boot |
-| `status_server.ps1` | One-command check: is the server up? |
+| `audio.py` | Decodes incoming audio (the server half of the format) |
+| `install.ps1` | One-time setup |
+| `start.bat` | Everyday launcher |
+| `start_hidden.bat` | Silent launcher used by the boot-time startup entry |
+| `install_service.ps1` / `uninstall_service.ps1` | Start the server automatically at boot |
+| `status.ps1` | One-command check: is the server up? |
 | `config.bat.example` | Template for the server's settings |
-| `requirements-*.txt` | The pip packages each role needs |
+| `requirements.txt` | The pip packages the server needs |
+
+**`client/`**
+
+| File | What it's for |
+|---|---|
+| `client.py` | Shared recording/transcribing logic used by both clients |
+| `audio.py` | Encodes recorded audio (the client half of the format) |
+| `tray_client.py` / `win_toast.py` | Windows tray client and its on-screen popup |
+| `tray_client_mac.py` / `mac_toast.py` | Mac menu-bar client and its popup |
+| `icons/` | Tray and popup artwork |
+| `windows/install.ps1` / `windows/uninstall.ps1` | One-time setup / removal |
+| `windows/start_tray.bat` | Everyday launcher |
+| `mac/install.sh` / `mac/uninstall.sh` | Same, for Mac |
+| `mac/start_tray.sh` | Everyday launcher |
+| `windows/requirements.txt` / `mac/requirements.txt` | The pip packages each client needs |
+
+One thing lives outside this split: the `venv/` folder at the top level,
+created by whichever installer you run first. Both roles share it, so a
+PC doing both jobs only needs one copy of the dependencies.

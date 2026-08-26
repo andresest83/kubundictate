@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # One-shot client setup: creates the venv and installs the menu-bar
-# client's dependencies. Run from this folder after `git clone`, on the
-# Mac that will run tray_client_mac.py. No elevation needed.
+# client's dependencies. Run as `client/mac/install.sh` from the repo
+# root after `git clone`, on the Mac that will run tray_client_mac.py.
+# No elevation needed.
 #
-# For the server (the GPU box), see install_server.ps1 -- server setup
+# For the server (the GPU box), see server/install.ps1 -- server setup
 # is Windows-only.
 
 set -euo pipefail
@@ -12,8 +13,11 @@ BOLD=$'\033[1m'
 YELLOW=$'\033[0;33m'
 RESET=$'\033[0m'
 
+# This script sits two levels down (client/mac/). The venv lives at the
+# repo root, matching where the Windows side puts it.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-venv_dir="$script_dir/venv"
+repo_root="$(cd "$script_dir/../.." && pwd)"
+venv_dir="$repo_root/venv"
 venv_python="$venv_dir/bin/python3"
 
 echo "=== KubunDictate mac client installer ==="
@@ -31,14 +35,14 @@ else
     python3 -m venv "$venv_dir"
 fi
 
-requirements_file="$script_dir/requirements-client-mac.txt"
+requirements_file="$script_dir/requirements.txt"
 echo "Installing dependencies from $(basename "$requirements_file")..."
 "$venv_python" -m pip install --upgrade pip --quiet
 "$venv_python" -m pip install -r "$requirements_file"
 
 echo ""
 echo "=== Done ==="
-echo "Run ./start_tray_mac.sh to start dictating -- it asks for your server's LAN or"
+echo "Run ./client/mac/start_tray.sh to start dictating -- it asks for your server's LAN or"
 echo "Tailscale address (localhost:<port> if this is the server's own box, and its"
 echo "token, if it has one) the first time it runs, and remembers the last 3 you've used."
 echo ""
@@ -54,4 +58,4 @@ echo ""
 echo "If Terminal isn't listed under either permission yet: click ${BOLD}+${RESET} and add"
 echo "${BOLD}Terminal itself${RESET} (not python3 -- the picker won't let you select a raw binary)."
 echo ""
-echo "Still stuck? See README.md -> 'Client (macOS)' for the full troubleshooting steps."
+echo "Still stuck? See README.md -> 'Set up a client' for the full troubleshooting steps."

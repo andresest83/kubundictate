@@ -33,7 +33,7 @@ from AppKit import (
     NSWindowStyleMaskBorderless,
 )
 
-ICON_DIR = Path(__file__).resolve().parent / "images"
+ICON_DIR = Path(__file__).resolve().parent / "icons"
 ICON_SOURCE_SIZE = 64
 ICON_DISPLAY_SIZE = 32
 PANEL_HEIGHT = 56

@@ -1,15 +1,19 @@
 # One-shot client setup: creates the venv and installs the client
-# (tray icon) dependencies. Run from this folder after `git clone`, on
-# any Windows PC -- including the server's own box, if you also want
-# to dictate directly there (point it at localhost:<port>). No
-# elevation needed.
+# (tray icon) dependencies. Run as `client\windows\install.ps1` from the
+# repo root after `git clone`, on any Windows PC -- including the
+# server's own box, if you also want to dictate directly there (point it
+# at localhost:<port>). No elevation needed.
 #
-# For the server (the GPU box), run install_server.ps1 instead.
+# For the server (the GPU box), run server\install.ps1 instead.
 
 $ErrorActionPreference = "Stop"
 
+# This script sits two levels down (client\windows\). The venv lives at
+# the repo root, shared with the server role so a box running both
+# (e.g. the GPU box) needs only one copy of it.
 $scriptDir = $PSScriptRoot
-$venvDir = Join-Path $scriptDir "venv"
+$repoRoot = Split-Path -Parent (Split-Path -Parent $scriptDir)
+$venvDir = Join-Path $repoRoot "venv"
 $venvPython = Join-Path $venvDir "Scripts\python.exe"
 
 Write-Output "=== KubunDictate client installer ==="
@@ -29,7 +33,7 @@ if (Test-Path $venvPython) {
     & python -m venv $venvDir
 }
 
-$requirementsFile = Join-Path $scriptDir "requirements-client.txt"
+$requirementsFile = Join-Path $scriptDir "requirements.txt"
 Write-Output "Installing dependencies from $(Split-Path -Leaf $requirementsFile)..."
 & $venvPython -m pip install --upgrade pip --quiet
 & $venvPython -m pip install -r $requirementsFile
@@ -40,6 +44,6 @@ if ($LASTEXITCODE -ne 0) {
 Write-Output ""
 
 Write-Output "=== Done ==="
-Write-Output "Run start_tray.bat to start dictating -- it asks for your server's LAN or"
+Write-Output "Run client\windows\start_tray.bat to start dictating -- it asks for your server's LAN or"
 Write-Output "Tailscale address (localhost:<port> if this is the server's own box, and its"
 Write-Output "token, if it has one) the first time it runs, and remembers the last 3 you've used."

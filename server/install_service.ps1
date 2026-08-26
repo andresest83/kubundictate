@@ -2,8 +2,13 @@
 # Windows Task Scheduler (runs as SYSTEM, whether or not anyone is
 # logged in). Must be run from an elevated (Administrator) PowerShell.
 #
-# This assumes install_server.ps1 has already been run in this folder
-# (config.bat present) -- see README.md.
+# This assumes server\install.ps1 has already been run (config.bat
+# present in this folder) -- see README.md.
+#
+# Note: the task stores the launcher's absolute path, so if the repo is
+# moved or the scripts are relocated, re-run this to re-register it --
+# otherwise the old path stays registered and the server silently fails
+# to start at boot.
 
 $ErrorActionPreference = "Stop"
 
@@ -14,11 +19,11 @@ if (-not $isAdmin) {
 }
 
 $taskName = "KubunDictateServer"
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$launcher = Join-Path $scriptDir "start_server_hidden.bat"
+$scriptDir = $PSScriptRoot
+$launcher = Join-Path $scriptDir "start_hidden.bat"
 
 if (-not (Test-Path $launcher)) {
-    Write-Error "start_server_hidden.bat not found next to this script ($launcher)."
+    Write-Error "start_hidden.bat not found next to this script ($launcher)."
     exit 1
 }
 
@@ -31,5 +36,5 @@ Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Pr
 
 Write-Output "Registered scheduled task '$taskName' (runs $launcher at startup as SYSTEM)."
 Write-Output "Start it now with: Start-ScheduledTask -TaskName $taskName"
-Write-Output "Check status with:  status_server.ps1"
+Write-Output "Check status with:  server\status.ps1"
 Write-Output "Logs land in:       $scriptDir\kubundictate.log"

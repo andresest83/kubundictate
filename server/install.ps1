@@ -1,16 +1,21 @@
 # One-shot server setup: creates the venv, installs the server
 # dependencies, writes config.bat, provisions the firewall rule, and
-# can register the startup service. Run from this folder after
-# `git clone`. Needs an elevated (Administrator) PowerShell.
+# can register the startup service. Run as `server\install.ps1` from the
+# repo root after `git clone`. Needs an elevated (Administrator)
+# PowerShell.
 #
 # For the client (any Windows PC, including this same box if you also
-# want to dictate directly on it), run install_client.ps1 instead --
-# each role gets its own dedicated installer.
+# want to dictate directly on it), run client\windows\install.ps1
+# instead -- each role gets its own dedicated installer.
 
 $ErrorActionPreference = "Stop"
 
+# Everything server-specific lives in this folder. The venv is the one
+# exception: it sits at the repo root, shared with the client role so a
+# box running both (e.g. the GPU box) needs only one copy of it.
 $scriptDir = $PSScriptRoot
-$venvDir = Join-Path $scriptDir "venv"
+$repoRoot = Split-Path -Parent $scriptDir
+$venvDir = Join-Path $repoRoot "venv"
 $venvPython = Join-Path $venvDir "Scripts\python.exe"
 $configPath = Join-Path $scriptDir "config.bat"
 
@@ -21,7 +26,7 @@ function Test-IsAdmin {
 function Test-TokenStrength([string]$Token) {
     # Special-character class is deliberately restricted to characters that
     # are inert in a .bat file's `set VAR=value` line -- config.bat is
-    # `call`ed by cmd.exe (start_server.bat/start_server_hidden.bat), which
+    # `call`ed by cmd.exe (start.bat/start_hidden.bat), which
     # parses %...% as variable expansion and ^ as its escape character,
     # silently corrupting anything outside this safe set (confirmed: a
     # generated token with ^ and % came out of `call config.bat` with both
@@ -73,7 +78,7 @@ if (Test-Path $venvPython) {
     & python -m venv $venvDir
 }
 
-$requirementsFile = Join-Path $scriptDir "requirements-server.txt"
+$requirementsFile = Join-Path $scriptDir "requirements.txt"
 Write-Output "Installing dependencies from $(Split-Path -Leaf $requirementsFile)..."
 & $venvPython -m pip install --upgrade pip --quiet
 & $venvPython -m pip install -r $requirementsFile
@@ -167,7 +172,7 @@ Write-Output ""
 
 $registerAnswer = Read-Host "Register the server as a startup service now (runs at boot, no login required)? [y/N]"
 if ($registerAnswer.Trim().ToLower() -eq "y") {
-    & (Join-Path $scriptDir "install_server_service.ps1")
+    & (Join-Path $scriptDir "install_service.ps1")
     $serviceRegistered = $true
 }
 Write-Output ""
@@ -191,6 +196,6 @@ Write-Output "=== Done ==="
 if ($serviceRegistered) {
     Write-Output "Server is registered to start at boot. Start it now with: Start-ScheduledTask -TaskName KubunDictateServer"
 } else {
-    Write-Output "Run start_server.bat to start the server now."
+    Write-Output "Run server\start.bat to start the server now."
 }
-Write-Output "Want to also dictate directly on this box? Run install_client.ps1 here too -- it's the same install as any other client machine, just pointed at localhost:$portForFirewall."
+Write-Output "Want to also dictate directly on this box? Run client\windows\install.ps1 here too -- it's the same install as any other client machine, just pointed at localhost:$portForFirewall."

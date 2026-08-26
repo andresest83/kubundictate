@@ -1,5 +1,5 @@
 # Removes the KubunDictateServer scheduled task created by
-# install_server_service.ps1. Must be run from an elevated
+# server\install_service.ps1. Must be run from an elevated
 # (Administrator) PowerShell.
 
 $ErrorActionPreference = "Stop"

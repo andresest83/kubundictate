@@ -1,6 +1,6 @@
 """Transcription server: loads faster-whisper once, serves it over HTTP.
 
-Entrypoint -- run directly via start_server.bat/start_server_hidden.bat
+Entrypoint -- run directly via start.bat/start_hidden.bat
 (see README.md for configuration). Keeps the model resident in VRAM
 between requests.
 """

@@ -28,8 +28,8 @@ import client
 import win_toast
 
 MAX_RECENT = 3
-ICON_DIR = Path(__file__).resolve().parent / "images"
-ICON_SIZE = 64  # matches images/kubundictate-<state>-64.png
+ICON_DIR = Path(__file__).resolve().parent / "icons"
+ICON_SIZE = 64  # matches icons/kubundictate-<state>-64.png
 PULSE_INTERVAL = 0.7  # seconds between listening-a/listening-b swaps
 
 SETTINGS_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "KubunDictate"
@@ -120,7 +120,7 @@ def _fill_frame(img, size):
 def _load_icons():
     # pystray.Icon.icon accepts a PIL Image directly -- no temp-file dance
     # needed, unlike the mac client's rumps.App.icon. Pre-rendered per
-    # state/size in images/ (see kubundictate-icons/README.md).
+    # state/size in icons/ (see kubundictate-icons/README.md).
     return {
         state: _fill_frame(Image.open(ICON_DIR / f"kubundictate-{state}-{ICON_SIZE}.png"), ICON_SIZE)
         for state in ("idle", "listening-a", "listening-b")
