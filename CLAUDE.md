@@ -178,15 +178,28 @@ per issue:
   the GPU box and reconnected the remote client after the token fix.
 - [#16](https://github.com/andresest83/kubundictate/issues/16)
   **Client feedback beyond clipboard + beep: always-on-top popup?**
-  (`priority: medium`) -- now scoped (2026-08-21): a transient toast,
-  not an always-available window -- one cue while actively listening,
-  a separate "Copied to clipboard" confirmation auto-dismissing after
-  ~1s, a distinctive animation (mic + soundwaves, or something more
-  characterful), positioned top-center/top-right without overlapping
-  the taskbar. Applies to both clients, supplements (not replaces) the
-  existing beeps/icon-color cues. Implementation questions from the
-  original filing (always-on-top window management, avoiding
-  focus-stealing, multi-monitor placement) still open. Not yet started.
+  (`priority: medium`) -- **implemented and verified on Windows
+  2026-08-26** via `win_toast.py`/`mac_toast.py` (PR
+  [#40](https://github.com/andresest83/kubundictate/pull/40)). A
+  transient toast, top-center, never overlapping the taskbar: pulsing
+  "Listening..." (reusing the condor listening-a/b icons, no new
+  artwork) while recording, then "Copied to clipboard" / "No speech
+  detected" / "Couldn't reach server", auto-dismissing after ~1s. A
+  distinct "Transcribing..." state (static, not pulsing) covers the
+  awaiting-server gap -- added after hands-on feedback that it stayed
+  on "Listening..." past hotkey release, which read as broken since
+  the user wasn't talking anymore. Windows: a custom layered popup on
+  its own dedicated thread, plain `ctypes` (no pywin32 needed after
+  all) -- deliberately not Tkinter, since a live-animating Tk popup
+  would have required moving pystray to `run_detached()` and
+  marshaling every existing dialog handler onto Tk's thread, real
+  regression risk to code that already worked. Also enables
+  per-monitor-v2 DPI awareness process-wide, fixing a
+  blurry-on-scaled-displays report (Windows was bitmap-stretching
+  every window since the process wasn't marked DPI-aware). Mac: an
+  `NSPanel` shown via `orderFrontRegardless()` (non-activating,
+  standard technique), riding the menu-bar client's existing polling
+  timer -- not yet hands-on tested on a real Mac.
 - [#18](https://github.com/andresest83/kubundictate/issues/18)
   **Multi-machine auth is impractical** (`priority: medium`) -- even
   after #15's fixes, pairing a new client still means reading a
