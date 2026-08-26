@@ -294,6 +294,9 @@ VRAM-hungry, drop to `distil-large-v3` or `medium` via `KUBUNDICTATE_MODEL`.
   (see "Quick install")
 - `install_client.ps1` -- one-shot Windows client setup: venv,
   dependencies (see "Quick install")
+- `uninstall_client.ps1` -- removes the Windows client's local state:
+  venv, settings, and the "Run at startup" Registry entry, for a
+  genuine clean-slate reinstall
 - `install_client_mac.sh` -- one-shot macOS client setup: venv,
   dependencies (see "Client (macOS)")
 - `uninstall_client_mac.sh` -- removes the macOS client's local state:
