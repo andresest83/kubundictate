@@ -307,6 +307,49 @@ per issue:
     up at boot; and `client/windows/uninstall.ps1`'s shared-venv guard
     now keys off `server\config.bat`, which must resolve or the guard
     never fires and the script deletes the server's dependencies.
+- **Client server list replaces the entry dialog** (no issue -- found
+  and decided during #44's testing). The tray menu's "Enter new
+  server..." dialog was unfixable as designed: a Tk dialog opened from
+  a pystray menu callback renders but never receives keyboard focus,
+  because pystray calls `SetForegroundWindow` on its own hidden systray
+  window immediately before dispatching the callback and Windows then
+  refuses to hand the foreground back. Instrumenting it settled the
+  question -- Tk's event loop running, focus and the modal grab on the
+  right widgets, foreground still pystray's. `AttachThreadInput` does
+  not help; pystray's window is on the same thread. Three attempted
+  fixes failed first, each in an instructive way: a worker thread
+  aborted the process outright (`Tcl_AsyncDelete: async handler deleted
+  by the wrong thread`), `transient()` on a withdrawn root opened the
+  dialog invisible (CPython's own `simpledialog` guards against exactly
+  this), and forcing the foreground was silently refused. The user's
+  call, and the right one: drop the dialog. Servers are now named
+  entries in `client_settings.json`, the installers collect them where
+  a console prompt cannot lose focus, and the menu only switches
+  between them. Both platforms share the format.
+  - Read as `utf-8-sig`: PowerShell's `Set-Content -Encoding utf8` and
+    Notepad both write a BOM, and a plain `utf-8` read rejects it --
+    which made a valid file look like "no servers configured".
+  - `client.log` in the settings dir. Both clients run without a
+    console, and pystray swallows callback errors into its own logger,
+    so failures were previously invisible. The recurring lesson across
+    every bug in this work: the silent failure path is the expensive
+    one.
+- **Client survives sleep/resume** (no issue -- reported during #44's
+  testing). The audio input stream was opened once at startup and never
+  checked, so it broke two ways, both silently, with the tray icon and
+  hotkey still behaving normally: opening before Windows had a default
+  input device killed the engine thread for the session, and a
+  suspend/resume left PortAudio holding a handle reporting
+  `active=True` while delivering nothing. Now opened with retries and
+  supervised; `_on_audio` fires continuously while healthy, so its
+  timestamp is the liveness signal (`stream.active` is not -- it stays
+  True in exactly the resume case). A matching watchdog on pynput's
+  listener was added at the same time and immediately caused a worse
+  bug on Mac by firing between key press and release, losing the
+  release event: start beep, then nothing. It now stays out of the way
+  while recording or transcribing. Worth remembering: that watchdog was
+  speculative, guarding a failure never actually observed, while the
+  audio half was evidenced twice.
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option

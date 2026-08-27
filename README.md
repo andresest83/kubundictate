@@ -54,9 +54,11 @@ client\windows\start_tray.bat
 ./client/mac/start_tray.sh
 ```
 
-The first time it runs, it asks for the server's address: just the
-IP address of the server PC on your network (or `localhost` if this
-is the same computer as the server).
+The installer asks where the server is: the IP address of the server PC
+on your network (or `localhost:9505` if this is the same computer as the
+server). It also offers to save a second address for
+[using it away from home](#using-it-away-from-home), so you can switch
+between the two later without setting anything up again.
 
 On a Mac, the first launch also asks for two permissions
 (**Accessibility** and **Input Monitoring**, under System Settings →
@@ -75,8 +77,8 @@ is set to German, these are labeled *Bedienungshilfen* and
 - A small popup near the top of your screen and a short sound confirm
   what's happening: listening, working, done.
 - Right-click the tray icon (Windows) or click the menu-bar icon (Mac)
-  for more: switch between recent servers, enter a new one, or turn on
-  "run automatically at startup."
+  to switch between your saved servers (say, home and Tailscale), edit
+  the list, or turn on "run automatically at startup."
 
 ## Start the server automatically
 
@@ -117,17 +119,42 @@ the install command again afterward for a genuine fresh start.
 
 Works on your home network automatically. To reach it from elsewhere
 (say, a laptop out and about), install [Tailscale](https://tailscale.com/)
-on both the server and client, and point the client at the server's
-Tailscale address instead. Nothing else needs to be opened up to the
-internet.
+on both the server and client, and give the client the server's Tailscale
+address as a second server when it asks. Then just pick whichever one you
+need from the tray menu. Nothing has to be opened up to the internet.
 
 ## Settings
 
 - **Server:** edit `server\config.bat`: port, which speech model to use,
   and an optional shared password if you want to restrict who can use it
   (off by default; fine to leave off on a trusted home network).
-- **Client:** everything's in the tray/menu-bar icon. No file to
-  edit.
+- **Client:** your saved servers live in a small file the installer
+  writes. Pick **Edit servers...** from the tray menu to open it, then
+  **Reload servers** once you've saved. Each entry is just a name and an
+  address:
+
+  ```json
+  {
+    "servers": [
+      { "name": "Home",      "url": "192.168.1.50:9505", "token": null },
+      { "name": "Tailscale", "url": "100.64.0.1:9505",   "token": null }
+    ],
+    "active": "Home"
+  }
+  ```
+
+  `token` is only needed if you set a shared password on the server.
+
+## If something's not working
+
+The client writes a log you can check:
+
+- **Windows:** `%APPDATA%\KubunDictate\client.log`
+- **Mac:** `~/Library/Application Support/KubunDictate/client.log`
+
+It records which microphone was opened, which server is in use, and
+anything that failed. Both clients run without a console window, so this
+file is the place to look when the icon is there but nothing happens.
 
 ## Why not just use an existing tool?
 
