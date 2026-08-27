@@ -1,12 +1,14 @@
 """Menu-bar client: same record/transcribe engine as client.py, but as a
-rumps menu-bar app instead of a console window, with a small "recent
-servers" list instead of hand-editing env vars.
+rumps menu-bar app instead of a console window, with a named list of
+servers to switch between (typically a LAN address and a Tailscale one).
 
 macOS equivalent of tray_client.py (which is Windows-only: pystray,
-winreg, tkinter). Settings (recent servers + their tokens) live in
+winreg). Servers live in
 ~/Library/Application Support/KubunDictate/client_settings.json -- the
-mac analogue of tray_client.py's %APPDATA% location. Run via
-mac/start_tray.sh.
+mac analogue of tray_client.py's %APPDATA% location, in the same format,
+written by mac/install.sh and editable from the menu. Neither client
+prompts for an address; see tray_client.py for why that dialog was
+dropped. Run via mac/start_tray.sh.
 
 The global hotkey listener (pynput) needs TWO separate macOS
 permissions, confirmed hands-on rather than assumed: Accessibility
@@ -31,6 +33,7 @@ import os
 import plistlib
 import re
 import subprocess
+import traceback
 import sys
 import tempfile
 import threading
@@ -58,7 +61,6 @@ except ImportError:
 import client
 import mac_toast
 
-MAX_RECENT = 3
 ICON_DIR = Path(__file__).resolve().parent / "icons"
 ICON_SOURCE_SIZE = 48  # nearest pre-rendered size at/above ICON_RENDER_SIZE
 ICON_RENDER_SIZE = 44  # @2x for a 22pt menu-bar icon
@@ -66,6 +68,7 @@ PULSE_INTERVAL = 0.7  # seconds between listening-a/listening-b swaps
 
 SETTINGS_DIR = Path.home() / "Library" / "Application Support" / "KubunDictate"
 SETTINGS_PATH = SETTINGS_DIR / "client_settings.json"
+LOG_PATH = SETTINGS_DIR / "client.log"
 
 LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 LAUNCH_AGENT_LABEL = "com.kubundictate.trayclient"
@@ -101,26 +104,82 @@ def set_startup_enabled(enabled):
             pass
 
 
-def load_recent():
+def log(message, exc=False):
+    """Append a line to the client log, optionally with a traceback.
+
+    Mirrors the Windows client. Errors inside a menu callback are easy to
+    lose -- rumps runs them on the AppKit run loop -- so there is always
+    somewhere to look.
+    """
     try:
-        data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return []
-    return [e for e in data.get("recent", []) if e.get("url")][:MAX_RECENT]
+        SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+        with open(LOG_PATH, "a", encoding="utf-8") as fh:
+            fh.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
+            if exc:
+                traceback.print_exc(file=fh)
+    except OSError:
+        pass
 
 
-def save_recent(recent):
+def load_settings():
+    """Reads the settings file, returning (servers, active_name).
+
+    Identical contract to the Windows client's, so one settings file
+    format serves both. Written to tolerate hand editing, since that is
+    now how servers get added: entries without a name get one, bare
+    addresses are expanded to full URLs, blank entries are dropped, and
+    the older {"recent": [...]} shape is migrated.
+    """
+    # utf-8-sig rather than utf-8: an editor may leave a byte-order mark,
+    # and a plain utf-8 read rejects one outright. Harmless when absent.
+    try:
+        data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
+        return [], None
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+        # An unreadable file otherwise looks exactly like "no servers
+        # configured", which is maddening to debug from the menu alone.
+        log(f"could not read {SETTINGS_PATH}: {exc}")
+        return [], None
+
+    raw = data.get("servers")
+    migrated = raw is None
+    if migrated:
+        raw = data.get("recent", [])
+
+    servers = []
+    for index, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            continue
+        url = (entry.get("url") or "").strip()
+        if not url:
+            continue
+        servers.append(
+            {
+                "name": (entry.get("name") or "").strip() or f"Server {index + 1}",
+                "url": normalize_url(url),
+                "token": entry.get("token") or None,
+            }
+        )
+
+    active = None if migrated else data.get("active")
+    if not any(s["name"] == active for s in servers):
+        active = servers[0]["name"] if servers else None
+    return servers, active
+
+
+def save_settings(servers, active):
     SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
     SETTINGS_PATH.write_text(
-        json.dumps({"recent": recent[:MAX_RECENT]}, indent=2), encoding="utf-8"
+        json.dumps({"servers": servers, "active": active}, indent=2),
+        encoding="utf-8",
     )
 
 
-def add_or_promote(recent, url, token):
-    """Moves url to the front (with the given token), capped at MAX_RECENT."""
-    recent = [e for e in recent if e["url"] != url]
-    recent.insert(0, {"url": url, "token": token})
-    return recent[:MAX_RECENT]
+def display_url(url):
+    """Strips the scheme off for display in the menu."""
+    prefix = "http://"
+    return url[len(prefix):] if url.startswith(prefix) else url
 
 
 def normalize_url(addr):
@@ -204,7 +263,7 @@ def _current_icon_state(pulse_a):
 
 class TrayApp(rumps.App):
     def __init__(self):
-        self.recent = load_recent()
+        self.servers, self.active = load_settings()
         self.stop_event = threading.Event()
         self._icon_state = "idle"
         self._pulse_a = True
@@ -222,26 +281,39 @@ class TrayApp(rumps.App):
         self._toast_seen_seq = 0
         self._toast_hide_at = None
 
+    def _active_entry(self):
+        for entry in self.servers:
+            if entry["name"] == self.active:
+                return entry
+        return None
+
     def _apply_active(self):
-        if self.recent:
-            active = self.recent[0]
-            client.settings.server_url = active["url"]
-            client.settings.token = active["token"]
+        entry = self._active_entry()
+        if entry:
+            client.settings.server_url = entry["url"]
+            client.settings.token = entry["token"]
 
     def _rebuild_menu(self):
         items = []
-        if self.recent:
-            items.append(rumps.MenuItem(f"Server: {self.recent[0]['url']}"))
+        active = self._active_entry()
+        if active:
+            items.append(rumps.MenuItem(f"Using: {active['name']}"))
         else:
-            items.append(rumps.MenuItem("No server configured"))
+            items.append(rumps.MenuItem("No server set up -- see Edit servers..."))
         items.append(rumps.separator)
 
-        for entry in self.recent:
-            item = rumps.MenuItem(entry["url"], callback=self._make_select_handler(entry))
-            item.state = self.recent[0]["url"] == entry["url"]
+        for entry in self.servers:
+            item = rumps.MenuItem(
+                f"{entry['name']}  ({display_url(entry['url'])})",
+                callback=self._make_select_handler(entry),
+            )
+            item.state = entry["name"] == self.active
             items.append(item)
+        if self.servers:
+            items.append(rumps.separator)
 
-        items.append(rumps.MenuItem("Enter new server...", callback=self._on_new_server))
+        items.append(rumps.MenuItem("Edit servers...", callback=self._on_edit_servers))
+        items.append(rumps.MenuItem("Reload servers", callback=self._on_reload))
         items.append(rumps.separator)
 
         startup_item = rumps.MenuItem("Run at login", callback=self._on_toggle_startup)
@@ -251,46 +323,46 @@ class TrayApp(rumps.App):
         items.append(rumps.MenuItem("Quit", callback=self._on_quit))
         self.menu = items
 
-    def _prompt_for_server(self, initial_token=""):
-        resp = rumps.Window(
-            message="Server address, e.g. 192.168.1.50:9505 or a Tailscale IP:",
-            title="KubunDictate",
-            ok="Next",
-            cancel="Cancel",
-        ).run()
-        if not resp.clicked or not resp.text.strip():
-            return None
-        url = normalize_url(resp.text)
-
-        resp = rumps.Window(
-            message="Shared token (blank = none):",
-            title="KubunDictate",
-            default_text=initial_token or "",
-            ok="Save",
-            cancel="Cancel",
-        ).run()
-        if not resp.clicked:
-            return None
-        return {"url": url, "token": resp.text.strip() or None}
-
     def _make_select_handler(self, entry):
         def handler(sender):
-            self.recent = add_or_promote(self.recent, entry["url"], entry["token"])
-            save_recent(self.recent)
-            self._apply_active()
-            self._rebuild_menu()
+            try:
+                self.active = entry["name"]
+                save_settings(self.servers, self.active)
+                self._apply_active()
+                self._rebuild_menu()
+            except Exception:
+                log(f"switching to server {entry['name']!r} failed", exc=True)
 
         return handler
 
-    def _on_new_server(self, sender):
-        current_token = self.recent[0]["token"] if self.recent else ""
-        result = self._prompt_for_server(initial_token=current_token)
-        if not result:
-            return
-        self.recent = add_or_promote(self.recent, result["url"], result["token"])
-        save_recent(self.recent)
-        self._apply_active()
-        self._rebuild_menu()
+    def _on_edit_servers(self, sender):
+        # Opens the file in whatever handles .json (TextEdit by default)
+        # instead of prompting. Matches the Windows client, which had to
+        # drop its own dialog entirely -- see tray_client.py -- so both
+        # platforms manage servers exactly the same way.
+        try:
+            if not SETTINGS_PATH.exists():
+                save_settings(self.servers, self.active)
+            subprocess.run(["open", str(SETTINGS_PATH)], check=False)
+            rumps.notification(
+                "KubunDictate", "", "Edit the file, then choose Reload servers."
+            )
+        except Exception:
+            log("opening the settings file failed", exc=True)
+
+    def _on_reload(self, sender):
+        try:
+            self.servers, self.active = load_settings()
+            self._apply_active()
+            self._rebuild_menu()
+            active = self._active_entry()
+            rumps.notification(
+                "KubunDictate",
+                "",
+                f"Using {active['name']}." if active else "No servers configured.",
+            )
+        except Exception:
+            log("reloading the settings file failed", exc=True)
 
     def _on_toggle_startup(self, sender):
         set_startup_enabled(not is_startup_enabled())
@@ -351,15 +423,13 @@ class TrayApp(rumps.App):
             self._toast_hide_at = None
 
     def run(self):
-        first_run = not self.recent
-        if first_run:
-            result = self._prompt_for_server()
-            if not result:
-                return
-            self.recent = add_or_promote(self.recent, result["url"], result["token"])
-            save_recent(self.recent)
-            self._rebuild_menu()
+        # Servers come from the settings file, written by the installer
+        # and editable from the menu -- the client never prompts.
         self._apply_active()
+        if not self.servers:
+            rumps.notification(
+                "KubunDictate", "", "No server set up yet. Menu bar icon -> Edit servers..."
+            )
 
         threading.Thread(target=lambda: client.run(self.stop_event), daemon=True).start()
         rumps.Timer(self._check_recording, 0.15).start()

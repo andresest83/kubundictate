@@ -40,11 +40,67 @@ echo "Installing dependencies from $(basename "$requirements_file")..."
 "$venv_python" -m pip install --upgrade pip --quiet
 "$venv_python" -m pip install -r "$requirements_file"
 
+# --- server list ---
+# Collected here rather than in the app: the Windows client had to drop
+# its own text-entry dialog entirely (it could never take keyboard focus
+# from the tray menu), so both platforms now read the same settings file
+# and the menu only switches between named entries.
+settings_dir="$HOME/Library/Application Support/KubunDictate"
+settings_path="$settings_dir/client_settings.json"
+
+write_settings=yes
+if [ -f "$settings_path" ]; then
+    printf 'Server list already exists. Replace it? [y/N] '
+    read -r replace
+    case "$replace" in
+        [Yy]*) write_settings=yes ;;
+        *)     write_settings=no ;;
+    esac
+fi
+
+if [ "$write_settings" = yes ]; then
+    echo ""
+    echo "Where is the server? This is the Windows PC with the graphics card."
+    printf 'Server address (e.g. 192.168.1.50:9505): '
+    read -r lan
+    lan="${lan:-192.168.1.50:9505}"
+
+    echo ""
+    echo "Optional: a Tailscale address for using this away from home."
+    printf 'Tailscale address (blank to skip): '
+    read -r tailscale
+
+    echo ""
+    echo "Only needed if the server was set up with a shared token."
+    printf 'Shared token (blank = none): '
+    read -r token
+
+    if [ -n "$token" ]; then
+        token_json="\"$token\""
+    else
+        token_json="null"
+    fi
+
+    mkdir -p "$settings_dir"
+    {
+        printf '{\n  "servers": [\n'
+        printf '    { "name": "Local", "url": "%s", "token": %s }' "$lan" "$token_json"
+        if [ -n "$tailscale" ]; then
+            printf ',\n    { "name": "Tailscale", "url": "%s", "token": %s }' \
+                "$tailscale" "$token_json"
+        fi
+        printf '\n  ],\n  "active": "Local"\n}\n'
+    } > "$settings_path"
+    echo ""
+    echo "Wrote $settings_path"
+else
+    echo "Keeping the existing server list."
+fi
+
 echo ""
 echo "=== Done ==="
-echo "Run ./client/mac/start_tray.sh to start dictating -- it asks for your server's LAN or"
-echo "Tailscale address (localhost:<port> if this is the server's own box, and its"
-echo "token, if it has one) the first time it runs, and remembers the last 3 you've used."
+echo "Run ./client/mac/start_tray.sh to start dictating."
+echo "Switch servers, or edit the list, from the menu-bar icon."
 echo ""
 echo "${BOLD}${YELLOW}Hold Left Option${RESET} to record, release to transcribe."
 echo ""
