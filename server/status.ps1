@@ -6,7 +6,7 @@ $scriptDir = $PSScriptRoot
 $configPath = Join-Path $scriptDir "config.bat"
 $taskName = "KubunDictateServer"
 
-$port = "50505"
+$port = "9505"
 if (Test-Path $configPath) {
     $portMatch = Select-String -Path $configPath -Pattern 'KUBUNDICTATE_PORT=(\d+)' | Select-Object -First 1
     if ($portMatch) { $port = $portMatch.Matches[0].Groups[1].Value }

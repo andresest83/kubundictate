@@ -128,7 +128,7 @@ def normalize_url(addr):
     if addr.startswith("http://") or addr.startswith("https://"):
         return addr
     if not re.search(r":\d+$", addr):
-        addr = f"{addr}:50505"
+        addr = f"{addr}:9505"
     return f"http://{addr}"
 
 
@@ -253,7 +253,7 @@ class TrayApp(rumps.App):
 
     def _prompt_for_server(self, initial_token=""):
         resp = rumps.Window(
-            message="Server address, e.g. 192.168.1.50:50505 or a Tailscale IP:",
+            message="Server address, e.g. 192.168.1.50:9505 or a Tailscale IP:",
             title="KubunDictate",
             ok="Next",
             cancel="Cancel",

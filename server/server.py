@@ -40,7 +40,7 @@ DEVICE = "cuda"
 COMPUTE_TYPE = "float16"
 LANGUAGE = os.environ.get("KUBUNDICTATE_LANGUAGE") or None  # None = auto-detect
 HOST = os.environ.get("KUBUNDICTATE_HOST", "0.0.0.0")
-PORT = int(os.environ.get("KUBUNDICTATE_PORT", "50505"))
+PORT = int(os.environ.get("KUBUNDICTATE_PORT", "9505"))
 TOKEN = os.environ.get("KUBUNDICTATE_TOKEN") or None
 
 # --------------------------------------------------------------------------

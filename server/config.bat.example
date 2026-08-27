@@ -6,7 +6,7 @@ REM (client\windows\start_tray.bat) keeps its own settings under
 REM %APPDATA%\KubunDictate\, set up on first run, not through this file.
 
 set KUBUNDICTATE_HOST=0.0.0.0
-set KUBUNDICTATE_PORT=50505
+set KUBUNDICTATE_PORT=9505
 set KUBUNDICTATE_MODEL=large-v3-turbo
 REM set KUBUNDICTATE_LANGUAGE=en
 

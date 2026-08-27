@@ -96,8 +96,8 @@ if (Test-Path $configPath) {
 }
 
 if ($writeConfig) {
-    $port = Read-Host "Server port [50505]"
-    if ([string]::IsNullOrWhiteSpace($port)) { $port = "50505" }
+    $port = Read-Host "Server port [9505]"
+    if ([string]::IsNullOrWhiteSpace($port)) { $port = "9505" }
     $model = Read-Host "Whisper model [large-v3-turbo]"
     if ([string]::IsNullOrWhiteSpace($model)) { $model = "large-v3-turbo" }
     $language = Read-Host "Force language code, e.g. 'en' (blank = auto-detect)"
@@ -161,7 +161,7 @@ $portForFirewall = if ($writeConfig) {
     $port
 } else {
     $existingPort = Select-String -Path $configPath -Pattern 'KUBUNDICTATE_PORT=(\d+)' | Select-Object -First 1
-    if ($existingPort) { $existingPort.Matches[0].Groups[1].Value } else { "50505" }
+    if ($existingPort) { $existingPort.Matches[0].Groups[1].Value } else { "9505" }
 }
 
 $ruleName = "KubunDictate Server"

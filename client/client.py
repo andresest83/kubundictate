@@ -174,7 +174,7 @@ def run(stop_event):
     if not settings.server_url:
         raise SystemExit(
             "KUBUNDICTATE_SERVER_URL is not set. Point it at the server, "
-            "e.g. http://192.168.1.50:50505"
+            "e.g. http://192.168.1.50:9505"
         )
 
     print(f"Server: {settings.server_url} (token auth: {'on' if settings.token else 'off'})")
