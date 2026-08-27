@@ -270,16 +270,23 @@ def _supervise_audio(stop_event, listener, start_listener):
     """
     global _last_audio_at
     stream = None
+    listener_dead_checks = 0
     while not stop_event.is_set():
         if stream is None:
             try:
                 _last_audio_at = time.monotonic()  # grace period before judging it
                 stream = _open_stream()
-                log(f"Audio input opened: {sd.query_devices(kind='input')['name']}")
             except Exception as exc:
                 log(f"Audio input unavailable ({exc}); retrying in {AUDIO_RETRY_SECONDS}s")
                 stop_event.wait(AUDIO_RETRY_SECONDS)
                 continue
+            # Naming the device is only for the log -- keep it out of the
+            # block above so a failure here can't be mistaken for the
+            # stream itself having failed to open.
+            try:
+                log(f"Audio input opened: {sd.query_devices(kind='input')['name']}")
+            except Exception:
+                log("Audio input opened")
 
         stop_event.wait(AUDIO_POLL_SECONDS)
         if stop_event.is_set():
@@ -301,15 +308,28 @@ def _supervise_audio(stop_event, listener, start_listener):
             _close_stream(stream)
             stream = None
 
-        if not listener.running:
-            log("Hotkey listener stopped -- restarting it")
-            try:
-                listener.stop()
-            except Exception:
-                pass
-            try:
-                listener = start_listener()
-            except Exception as exc:
-                log(f"Could not restart the hotkey listener ({exc})")
+        # Deliberately cautious. Replacing the listener mid-keypress loses
+        # the release event, which leaves a recording that never stops --
+        # you get the start beep and then nothing at all. So: never while
+        # the user is mid-dictation, and only after it has looked dead on
+        # two consecutive checks, since pynput can report `running` False
+        # transiently while starting up.
+        if _recording or _transcribing:
+            listener_dead_checks = 0
+        elif listener.running:
+            listener_dead_checks = 0
+        else:
+            listener_dead_checks += 1
+            if listener_dead_checks >= 2:
+                listener_dead_checks = 0
+                log("Hotkey listener stopped -- restarting it")
+                try:
+                    listener.stop()
+                except Exception:
+                    pass
+                try:
+                    listener = start_listener()
+                except Exception as exc:
+                    log(f"Could not restart the hotkey listener ({exc})")
 
     _close_stream(stream)

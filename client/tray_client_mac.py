@@ -321,6 +321,11 @@ class TrayApp(rumps.App):
         items.append(startup_item)
 
         items.append(rumps.MenuItem("Quit", callback=self._on_quit))
+        # clear() first: assigning to rumps' menu *adds* to whatever is
+        # already there (its setter calls Menu.update, which appends), so
+        # without this every rebuild stacks another complete copy of the
+        # menu underneath the last one.
+        self.menu.clear()
         self.menu = items
 
     def _make_select_handler(self, entry):
