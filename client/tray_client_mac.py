@@ -440,6 +440,8 @@ class TrayApp(rumps.App):
 def main():
     _request_accessibility_trust()
     _request_input_monitoring_access()
+    # Route the engine's diagnostics into the same file, as on Windows.
+    client.log = log
     TrayApp().run()
 
 

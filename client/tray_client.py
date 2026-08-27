@@ -429,6 +429,10 @@ def _enable_dpi_awareness():
 
 def main():
     _enable_dpi_awareness()
+    # Route the engine's diagnostics into the same file. Under pythonw.exe
+    # its print() output has nowhere to go, which is how a dead audio
+    # stream stayed invisible.
+    client.log = log
     TrayApp().run()
 
 
