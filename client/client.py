@@ -78,11 +78,17 @@ def _set_result(text, error):
 
 
 _last_audio_at = 0.0  # monotonic time of the most recent input callback
+_callback_count = 0
 
 
 def _on_audio(indata, frames_count, time_info, status):
-    global _last_audio_at
+    global _last_audio_at, _callback_count
     _last_audio_at = time.monotonic()
+    _callback_count += 1
+    if status:
+        # Overflows/underflows from PortAudio. Rare, and only worth a line
+        # when they actually happen.
+        log(f"audio callback status: {status}")
     if _recording:
         _audio_queue.put(indata.copy())
 
@@ -129,7 +135,7 @@ def start_recording():
         _audio_queue.queue.clear()
     _recording = True
     _beep(880, 80)
-    print("[recording...]")
+    log(f"hotkey down -- recording (callbacks so far: {_callback_count})")
 
 
 def stop_recording_and_transcribe():
@@ -137,24 +143,40 @@ def stop_recording_and_transcribe():
     _recording = False
     _drain_queue_into(_frames)
     _beep(440, 80)
+    log(f"hotkey up -- captured {len(_frames)} audio blocks")
 
     if not _frames:
-        print("[no audio captured]")
+        # Nothing arrived at all: the stream is not delivering. Distinct
+        # from capturing silence, which still produces blocks -- see the
+        # peak level logged below.
+        log("no audio captured -- the input stream delivered nothing")
         _set_result(None, "aborted")
         return
 
     audio = np.concatenate(_frames, axis=0).flatten().astype(np.float32)
     duration = len(audio) / SAMPLE_RATE
+    peak = float(np.max(np.abs(audio))) if len(audio) else 0.0
+    log(f"captured {duration:.2f}s, peak level {peak:.4f}")
+    if peak < 1e-6:
+        # Blocks arrived but every sample is zero. On macOS that is what
+        # a denied microphone permission looks like: the stream opens and
+        # runs, it just never carries any sound.
+        log(
+            "WARNING: audio is pure silence. On macOS check System Settings"
+            " -> Privacy & Security -> Microphone; on Windows check the input"
+            " device is not muted."
+        )
     if duration < 0.2:
-        print("[clip too short, ignored]")
+        log("clip too short, ignored")
         _set_result(None, "aborted")
         return
 
-    print(f"[sending {duration:.1f}s of audio to {settings.server_url}...]")
+    log(f"sending {duration:.2f}s to {settings.server_url}")
     wav_bytes = float32_to_wav_bytes(audio, SAMPLE_RATE)
     headers = {"Authorization": f"Bearer {settings.token}"} if settings.token else {}
 
     _transcribing = True
+    started = time.monotonic()
     try:
         try:
             resp = requests.post(
@@ -163,21 +185,28 @@ def stop_recording_and_transcribe():
                 headers=headers,
                 timeout=REQUEST_TIMEOUT,
             )
+            log(f"server replied {resp.status_code} in {time.monotonic() - started:.1f}s")
             resp.raise_for_status()
             text = resp.json()["text"]
         except requests.RequestException as e:
-            print(f"[error: could not reach server: {e}]")
+            log(f"could not reach server: {e}")
+            _beep(220, 200)
+            _set_result(None, "could not reach server")
+            return
+        except (ValueError, KeyError) as e:
+            # Reached the server but the body was not the JSON we expect.
+            log(f"unexpected reply from server: {e}; body was {resp.text[:200]!r}")
             _beep(220, 200)
             _set_result(None, "could not reach server")
             return
 
         if text:
             pyperclip.copy(text)
-            print(f'"{text}"  (copied to clipboard)')
+            log(f"transcribed {len(text)} chars, copied to clipboard")
             _beep(1200, 60)
             _set_result(text, None)
         else:
-            print("[no speech detected]")
+            log("server returned no text (no speech detected)")
             _set_result(None, "no speech detected")
     finally:
         _transcribing = False

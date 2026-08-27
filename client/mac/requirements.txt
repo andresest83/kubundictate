@@ -7,3 +7,8 @@ rumps
 Pillow
 pyobjc-framework-ApplicationServices
 pyobjc-framework-Cocoa
+# Microphone permission: a separate TCC category from Accessibility and
+# Input Monitoring. Without it macOS silently hands the app an all-zero
+# audio stream rather than failing, so recording looks fine and every
+# transcription comes back empty.
+pyobjc-framework-AVFoundation

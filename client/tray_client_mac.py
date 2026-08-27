@@ -33,6 +33,7 @@ import os
 import plistlib
 import re
 import subprocess
+import platform
 import traceback
 import sys
 import tempfile
@@ -218,6 +219,103 @@ def _request_input_monitoring_access():
         CGRequestListenEventAccess()
     except Exception:
         pass
+
+
+def _request_microphone_access():
+    """Trigger macOS's microphone prompt on first launch.
+
+    The third TCC category, alongside Accessibility and Input Monitoring,
+    and the only one nothing here was ever asking for -- which is a strong
+    candidate for #46. Same prompt-then-relaunch caveat as the other two:
+    granting it does not retroactively let the running process capture.
+    """
+    try:
+        from AVFoundation import AVCaptureDevice, AVMediaTypeAudio
+    except ImportError:
+        log("AVFoundation not installed -- cannot prompt for microphone access")
+        return
+    try:
+        if AVCaptureDevice.authorizationStatusForMediaType_(AVMediaTypeAudio) == 3:
+            return  # already granted
+        AVCaptureDevice.requestAccessForMediaType_completionHandler_(
+            AVMediaTypeAudio,
+            lambda granted: log(f"microphone permission granted: {bool(granted)}"),
+        )
+    except Exception as exc:
+        log(f"could not request microphone access: {exc}")
+
+
+def _microphone_authorization():
+    """macOS microphone permission, as a readable string.
+
+    A third TCC category, separate from Accessibility and Input
+    Monitoring, and the one the installer never asks for. It matters
+    because a denial is invisible from the app's side: PortAudio still
+    opens the stream and still delivers callbacks, they just contain
+    nothing but zeros, so recording "works" and every transcription comes
+    back empty.
+    """
+    try:
+        from AVFoundation import AVCaptureDevice, AVMediaTypeAudio
+    except ImportError:
+        return "unknown (pyobjc-framework-AVFoundation not installed)"
+    try:
+        status = AVCaptureDevice.authorizationStatusForMediaType_(AVMediaTypeAudio)
+    except Exception as exc:
+        return f"unknown ({exc})"
+    return {
+        0: "not determined (never asked)",
+        1: "RESTRICTED",
+        2: "DENIED",
+        3: "granted",
+    }.get(status, f"unknown ({status})")
+
+
+def log_environment():
+    """Record everything needed to diagnose a silent failure, at launch.
+
+    Deliberately verbose and written once per start: the alternative is
+    asking the user to describe what they observed, which has proved slow
+    and lossy. Everything here is a fact the app can establish about
+    itself.
+    """
+    log("--- KubunDictate mac client starting ---")
+    try:
+        log(f"python {sys.version.split()[0]} on {platform.platform()}")
+    except Exception:
+        pass
+
+    accessibility = "unknown"
+    if AXIsProcessTrustedWithOptions is not None:
+        try:
+            accessibility = "granted" if AXIsProcessTrustedWithOptions({}) else "DENIED"
+        except Exception as exc:
+            accessibility = f"unknown ({exc})"
+    log(f"permission Accessibility    : {accessibility}")
+
+    listen = "unknown"
+    if CGPreflightListenEventAccess is not None:
+        try:
+            listen = "granted" if CGPreflightListenEventAccess() else "DENIED"
+        except Exception as exc:
+            listen = f"unknown ({exc})"
+    log(f"permission Input Monitoring : {listen}")
+    log(f"permission Microphone       : {_microphone_authorization()}")
+
+    try:
+        import sounddevice as sd
+
+        default_in = sd.default.device[0]
+        log(f"default input device index  : {default_in}")
+        for index, dev in enumerate(sd.query_devices()):
+            if dev["max_input_channels"] > 0:
+                mark = " <- default" if index == default_in else ""
+                log(
+                    f"  input {index}: {dev['name']} "
+                    f"({dev['max_input_channels']}ch @ {dev['default_samplerate']:.0f}Hz){mark}"
+                )
+    except Exception as exc:
+        log(f"could not enumerate audio devices: {exc}")
 
 
 def _fill_frame(img, size):
@@ -443,10 +541,13 @@ class TrayApp(rumps.App):
 
 
 def main():
+    # Route the engine's diagnostics into the same file, as on Windows.
+    # Done before anything else so nothing that follows can fail silently.
+    client.log = log
+    log_environment()
     _request_accessibility_trust()
     _request_input_monitoring_access()
-    # Route the engine's diagnostics into the same file, as on Windows.
-    client.log = log
+    _request_microphone_access()
     TrayApp().run()
 
 
