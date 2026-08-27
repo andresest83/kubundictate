@@ -8,6 +8,7 @@ imported by tray_client.py, which owns the stop_event passed to run().
 import os
 import queue
 import sys
+import time
 
 import numpy as np
 import requests
@@ -16,6 +17,11 @@ import pyperclip
 from pynput import keyboard
 
 from audio import float32_to_wav_bytes
+
+# Diagnostics sink. The tray clients replace this with their file logger:
+# they run under pythonw.exe (Windows) or detached (Mac), where there is
+# no console and a bare print() goes nowhere.
+log = print
 
 # --------------------------------------------------------------------------
 # Config
@@ -41,6 +47,13 @@ else:
     HOTKEY_NAME = "F9"
 REQUEST_TIMEOUT = 120  # seconds
 
+# Audio-stream supervision (see _supervise_audio). The input callback
+# fires continuously once the stream is running -- whether or not we are
+# recording -- so its timestamp doubles as a liveness heartbeat.
+AUDIO_POLL_SECONDS = 2
+AUDIO_RETRY_SECONDS = 3
+AUDIO_SILENCE_TIMEOUT = 5  # no callback for this long means the stream is dead
+
 # --------------------------------------------------------------------------
 
 _recording = False
@@ -64,7 +77,12 @@ def _set_result(text, error):
     last_result = (text, error, _result_seq)
 
 
+_last_audio_at = 0.0  # monotonic time of the most recent input callback
+
+
 def _on_audio(indata, frames_count, time_info, status):
+    global _last_audio_at
+    _last_audio_at = time.monotonic()
     if _recording:
         _audio_queue.put(indata.copy())
 
@@ -174,19 +192,11 @@ def run(stop_event):
     if not settings.server_url:
         raise SystemExit(
             "KUBUNDICTATE_SERVER_URL is not set. Point it at the server, "
-            "e.g. http://192.168.1.50:50505"
+            "e.g. http://192.168.1.50:9505"
         )
 
-    print(f"Server: {settings.server_url} (token auth: {'on' if settings.token else 'off'})")
-    print(f"Hold {HOTKEY_NAME} to talk, release to transcribe + copy to clipboard.")
-
-    stream = sd.InputStream(
-        samplerate=SAMPLE_RATE,
-        channels=1,
-        dtype="float32",
-        callback=_on_audio,
-    )
-    stream.start()
+    log(f"Server: {settings.server_url} (token auth: {'on' if settings.token else 'off'})")
+    log(f"Hold {HOTKEY_NAME} to talk, release to transcribe + copy to clipboard.")
 
     def on_press(key):
         if key == HOTKEY and not _recording:
@@ -196,15 +206,130 @@ def run(stop_event):
         if key == HOTKEY and _recording:
             stop_recording_and_transcribe()
 
-    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-    listener.start()
+    def start_listener():
+        listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+        listener.start()
+        return listener
 
+    listener = start_listener()
     try:
-        stop_event.wait()
+        _supervise_audio(stop_event, listener, start_listener)
     except KeyboardInterrupt:
         pass
     finally:
-        listener.stop()
+        try:
+            listener.stop()
+        except Exception:
+            pass
+        log("Goodbye.")
+
+
+def _open_stream():
+    stream = sd.InputStream(
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        dtype="float32",
+        callback=_on_audio,
+    )
+    stream.start()
+    return stream
+
+
+def _close_stream(stream):
+    if stream is None:
+        return
+    try:
         stream.stop()
         stream.close()
-        print("Goodbye.")
+    except Exception:
+        pass
+
+
+def _supervise_audio(stop_event, listener, start_listener):
+    """Keeps a working input stream (and hotkey listener) alive.
+
+    The stream used to be opened once at startup and never looked at
+    again, which broke in two ways, both seen on the GPU box:
+
+    - Opening it before Windows has a default input device -- right after
+      boot, or with no mic attached -- raised straight out of this
+      thread. That killed recording for the entire session, silently: the
+      tray icon and hotkey carried on as if nothing were wrong.
+    - A sleep/resume cycle can leave PortAudio holding a handle that
+      still reports itself open but never delivers another callback.
+      Same outcome, and the only cure was quitting and relaunching.
+
+    So the stream is opened with retries rather than once, and then
+    watched. _on_audio fires continuously while the stream is healthy --
+    recording or not -- so a stale timestamp is a reliable "this is dead"
+    signal, more so than stream.active, which stays True in the
+    resume-from-sleep case.
+
+    The hotkey listener gets the same treatment: pynput's global hook can
+    also be dropped across a resume, with the same invisible result.
+    """
+    global _last_audio_at
+    stream = None
+    listener_dead_checks = 0
+    while not stop_event.is_set():
+        if stream is None:
+            try:
+                _last_audio_at = time.monotonic()  # grace period before judging it
+                stream = _open_stream()
+            except Exception as exc:
+                log(f"Audio input unavailable ({exc}); retrying in {AUDIO_RETRY_SECONDS}s")
+                stop_event.wait(AUDIO_RETRY_SECONDS)
+                continue
+            # Naming the device is only for the log -- keep it out of the
+            # block above so a failure here can't be mistaken for the
+            # stream itself having failed to open.
+            try:
+                log(f"Audio input opened: {sd.query_devices(kind='input')['name']}")
+            except Exception:
+                log("Audio input opened")
+
+        stop_event.wait(AUDIO_POLL_SECONDS)
+        if stop_event.is_set():
+            break
+
+        try:
+            silent_for = time.monotonic() - _last_audio_at
+            dead = silent_for > AUDIO_SILENCE_TIMEOUT or not stream.active
+            if dead:
+                log(
+                    f"Audio input stopped responding "
+                    f"(active={stream.active}, no data for {silent_for:.0f}s) -- reopening"
+                )
+        except Exception as exc:
+            log(f"Audio input check failed ({exc}) -- reopening")
+            dead = True
+
+        if dead:
+            _close_stream(stream)
+            stream = None
+
+        # Deliberately cautious. Replacing the listener mid-keypress loses
+        # the release event, which leaves a recording that never stops --
+        # you get the start beep and then nothing at all. So: never while
+        # the user is mid-dictation, and only after it has looked dead on
+        # two consecutive checks, since pynput can report `running` False
+        # transiently while starting up.
+        if _recording or _transcribing:
+            listener_dead_checks = 0
+        elif listener.running:
+            listener_dead_checks = 0
+        else:
+            listener_dead_checks += 1
+            if listener_dead_checks >= 2:
+                listener_dead_checks = 0
+                log("Hotkey listener stopped -- restarting it")
+                try:
+                    listener.stop()
+                except Exception:
+                    pass
+                try:
+                    listener = start_listener()
+                except Exception as exc:
+                    log(f"Could not restart the hotkey listener ({exc})")
+
+    _close_stream(stream)

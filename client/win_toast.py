@@ -46,7 +46,7 @@ dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
 
 DWMWA_TRANSITIONS_FORCEDISABLED = 3
 
-ICON_DIR = Path(__file__).resolve().parent / "images"
+ICON_DIR = Path(__file__).resolve().parent / "icons"
 ICON_SIZE = 64
 PULSE_INTERVAL_MS = 700
 RESULT_HOLD_MS = 1000

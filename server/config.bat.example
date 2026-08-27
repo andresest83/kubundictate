@@ -1,12 +1,12 @@
 @echo off
 REM Copy this file to config.bat (gitignored) and fill in the values for
-REM the server. start_server.bat / start_server_hidden.bat call config.bat
-REM if present. This is server-only -- the tray client (start_tray.bat)
-REM keeps its own settings under %APPDATA%\KubunDictate\, set up on first
-REM run, not through this file.
+REM the server. start.bat / start_hidden.bat, next to this file, call
+REM config.bat if present. This is server-only -- the tray client
+REM (client\windows\start_tray.bat) keeps its own settings under
+REM %APPDATA%\KubunDictate\, set up on first run, not through this file.
 
 set KUBUNDICTATE_HOST=0.0.0.0
-set KUBUNDICTATE_PORT=50505
+set KUBUNDICTATE_PORT=9505
 set KUBUNDICTATE_MODEL=large-v3-turbo
 REM set KUBUNDICTATE_LANGUAGE=en
 

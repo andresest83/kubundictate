@@ -1,12 +1,13 @@
 """System-tray client: same record/transcribe engine as client.py, but as
-a tray icon instead of a console window, with a small "recent servers"
-list instead of hand-editing config.bat.
+a tray icon instead of a console window, with a named list of servers to
+switch between (typically a LAN address and a Tailscale one).
 
-Settings (recent servers + their tokens) live in
-%APPDATA%\\KubunDictate\\client_settings.json -- separate from the
-server's config.bat, since this is meant to be run standalone (no repo
-folder needed once it's set up). Run via start_tray.bat (pythonw.exe,
-no console window).
+Servers live in %APPDATA%\\KubunDictate\\client_settings.json -- written
+by the installer, editable straight from the tray menu, and separate from
+the server's config.bat since this is meant to run standalone (no repo
+folder needed once it's set up). The client deliberately has no
+text-entry dialog of its own; see TrayApp._on_edit_servers for why. Run
+via windows\\start_tray.bat (pythonw.exe, no console window).
 """
 
 import ctypes
@@ -16,10 +17,9 @@ import re
 import sys
 import threading
 import time
-import tkinter as tk
+import traceback
 import winreg
 from pathlib import Path
-from tkinter import simpledialog
 
 from PIL import Image
 import pystray
@@ -27,16 +27,38 @@ import pystray
 import client
 import win_toast
 
-MAX_RECENT = 3
-ICON_DIR = Path(__file__).resolve().parent / "images"
-ICON_SIZE = 64  # matches images/kubundictate-<state>-64.png
+# Assumed when an address is written without one. Matches the port
+# server\install.ps1 offers by default.
+DEFAULT_PORT = 9505
+ICON_DIR = Path(__file__).resolve().parent / "icons"
+ICON_SIZE = 64  # matches icons/kubundictate-<state>-64.png
 PULSE_INTERVAL = 0.7  # seconds between listening-a/listening-b swaps
 
 SETTINGS_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "KubunDictate"
 SETTINGS_PATH = SETTINGS_DIR / "client_settings.json"
+LOG_PATH = SETTINGS_DIR / "client.log"
 
 STARTUP_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 STARTUP_NAME = "KubunDictate"
+
+
+def log(message, exc=False):
+    """Append a line to the client log, optionally with a traceback.
+
+    This runs under pythonw.exe, which has no console and no stderr, so
+    an exception raised inside a tray menu callback disappears without a
+    trace -- the symptom is a menu item that simply does nothing. pystray
+    swallows callback errors into its own logger too. Writing here means
+    there is always somewhere to look.
+    """
+    try:
+        SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+        with open(LOG_PATH, "a", encoding="utf-8") as fh:
+            fh.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
+            if exc:
+                traceback.print_exc(file=fh)
+    except OSError:
+        pass
 
 
 def _startup_command():
@@ -68,26 +90,62 @@ def set_startup_enabled(enabled):
                 pass
 
 
-def load_recent():
+def load_settings():
+    """Reads the settings file, returning (servers, active_name).
+
+    Written to tolerate hand editing, since that file is now the way
+    servers get added or changed: entries without a name get one, bare
+    addresses are expanded to full URLs, and blank entries are dropped.
+    Also migrates the older {"recent": [...]} shape, which had no names
+    and tracked the active server by keeping it first in the list.
+    """
+    # utf-8-sig, not utf-8: both Notepad (which "Edit servers..." opens
+    # this in) and Windows PowerShell's Set-Content write UTF-8 with a
+    # byte-order mark, and a plain utf-8 read rejects that outright. The
+    # -sig codec strips a BOM when present and is identical otherwise.
     try:
-        data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return []
-    return [e for e in data.get("recent", []) if e.get("url")][:MAX_RECENT]
+        data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
+        return [], None
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+        # Worth a log line: an unreadable file otherwise looks exactly
+        # like "no servers configured", which is a maddening thing to
+        # debug from the menu alone.
+        log(f"could not read {SETTINGS_PATH}: {exc}")
+        return [], None
+
+    raw = data.get("servers")
+    migrated = raw is None
+    if migrated:
+        raw = data.get("recent", [])
+
+    servers = []
+    for index, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            continue
+        url = (entry.get("url") or "").strip()
+        if not url:
+            continue
+        servers.append(
+            {
+                "name": (entry.get("name") or "").strip() or f"Server {index + 1}",
+                "url": normalize_url(url),
+                "token": entry.get("token") or None,
+            }
+        )
+
+    active = None if migrated else data.get("active")
+    if not any(s["name"] == active for s in servers):
+        active = servers[0]["name"] if servers else None
+    return servers, active
 
 
-def save_recent(recent):
+def save_settings(servers, active):
     SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
     SETTINGS_PATH.write_text(
-        json.dumps({"recent": recent[:MAX_RECENT]}, indent=2), encoding="utf-8"
+        json.dumps({"servers": servers, "active": active}, indent=2),
+        encoding="utf-8",
     )
-
-
-def add_or_promote(recent, url, token):
-    """Moves url to the front (with the given token), capped at MAX_RECENT."""
-    recent = [e for e in recent if e["url"] != url]
-    recent.insert(0, {"url": url, "token": token})
-    return recent[:MAX_RECENT]
 
 
 def normalize_url(addr):
@@ -95,8 +153,15 @@ def normalize_url(addr):
     if addr.startswith("http://") or addr.startswith("https://"):
         return addr
     if not re.search(r":\d+$", addr):
-        addr = f"{addr}:50505"
+        addr = f"{addr}:{DEFAULT_PORT}"
     return f"http://{addr}"
+
+
+def display_url(url):
+    """Strips the scheme back off for editing, so the prefilled address
+    reads the way the user typed it rather than the way we stored it."""
+    prefix = "http://"
+    return url[len(prefix):] if url.startswith(prefix) else url
 
 
 def _fill_frame(img, size):
@@ -120,7 +185,7 @@ def _fill_frame(img, size):
 def _load_icons():
     # pystray.Icon.icon accepts a PIL Image directly -- no temp-file dance
     # needed, unlike the mac client's rumps.App.icon. Pre-rendered per
-    # state/size in images/ (see kubundictate-icons/README.md).
+    # state/size in icons/ (see kubundictate-icons/README.md).
     return {
         state: _fill_frame(Image.open(ICON_DIR / f"kubundictate-{state}-{ICON_SIZE}.png"), ICON_SIZE)
         for state in ("idle", "listening-a", "listening-b")
@@ -188,9 +253,8 @@ def _watch_recording(icon, icons, stop_event):
 
 class TrayApp:
     def __init__(self):
-        self.recent = load_recent()
+        self.servers, self.active = load_settings()
         self.stop_event = threading.Event()
-        self._tk_root = None
         self._icons = _load_icons()
         self.icon = pystray.Icon(
             "kubundictate",
@@ -199,59 +263,46 @@ class TrayApp:
             menu=self._build_menu(),
         )
 
-    def _get_tk_root(self):
-        if self._tk_root is None:
-            self._tk_root = tk.Tk()
-            self._tk_root.withdraw()
-        return self._tk_root
-
-    def _prompt_for_server(self, initial_token=""):
-        root = self._get_tk_root()
-        root.attributes("-topmost", True)
-        addr = simpledialog.askstring(
-            "KubunDictate",
-            "Server address, e.g. 192.168.1.50:50505 or a Tailscale IP:",
-            parent=root,
-        )
-        if not addr or not addr.strip():
-            return None
-        url = normalize_url(addr)
-        token = simpledialog.askstring(
-            "KubunDictate",
-            "Shared token (blank = none):",
-            parent=root,
-            initialvalue=initial_token or "",
-        )
-        return {"url": url, "token": (token or None)}
+    def _active_entry(self):
+        for entry in self.servers:
+            if entry["name"] == self.active:
+                return entry
+        return None
 
     def _apply_active(self):
-        if self.recent:
-            active = self.recent[0]
-            client.settings.server_url = active["url"]
-            client.settings.token = active["token"]
+        entry = self._active_entry()
+        if entry:
+            client.settings.server_url = entry["url"]
+            client.settings.token = entry["token"]
 
     def _refresh_menu(self):
         self.icon.menu = self._build_menu()
 
     def _build_menu(self):
         items = []
-        if self.recent:
-            items.append(pystray.MenuItem(f"Server: {self.recent[0]['url']}", None, enabled=False))
+        active = self._active_entry()
+        if active:
+            items.append(pystray.MenuItem(f"Using: {active['name']}", None, enabled=False))
         else:
-            items.append(pystray.MenuItem("No server configured", None, enabled=False))
+            items.append(
+                pystray.MenuItem("No server set up -- see Edit servers...", None, enabled=False)
+            )
         items.append(pystray.Menu.SEPARATOR)
 
-        for entry in self.recent:
+        for entry in self.servers:
             items.append(
                 pystray.MenuItem(
-                    entry["url"],
+                    f"{entry['name']}  ({display_url(entry['url'])})",
                     self._make_select_handler(entry),
                     checked=self._make_checked(entry),
                     radio=True,
                 )
             )
+        if self.servers:
+            items.append(pystray.Menu.SEPARATOR)
 
-        items.append(pystray.MenuItem("Enter new server...", self._on_new_server))
+        items.append(pystray.MenuItem("Edit servers...", self._on_edit_servers))
+        items.append(pystray.MenuItem("Reload servers", self._on_reload))
         items.append(pystray.Menu.SEPARATOR)
         items.append(
             pystray.MenuItem(
@@ -263,28 +314,49 @@ class TrayApp:
 
     def _make_select_handler(self, entry):
         def handler(icon, item):
-            self.recent = add_or_promote(self.recent, entry["url"], entry["token"])
-            save_recent(self.recent)
-            self._apply_active()
-            self._refresh_menu()
+            try:
+                self.active = entry["name"]
+                save_settings(self.servers, self.active)
+                self._apply_active()
+                self._refresh_menu()
+            except Exception:
+                log(f"switching to server {entry['name']!r} failed", exc=True)
 
         return handler
 
     def _make_checked(self, entry):
         def checked(item):
-            return bool(self.recent) and self.recent[0]["url"] == entry["url"]
+            return entry["name"] == self.active
 
         return checked
 
-    def _on_new_server(self, icon, item):
-        current_token = self.recent[0]["token"] if self.recent else ""
-        result = self._prompt_for_server(initial_token=current_token)
-        if not result:
-            return
-        self.recent = add_or_promote(self.recent, result["url"], result["token"])
-        save_recent(self.recent)
-        self._apply_active()
-        self._refresh_menu()
+    def _on_edit_servers(self, icon, item):
+        # Hands the file to whatever opens .json (Notepad by default)
+        # rather than showing a text box of our own. A Tk dialog opened
+        # from a pystray menu callback could not be made to reliably take
+        # keyboard focus -- the menu callback runs inside pystray's own
+        # message loop, and every workaround traded one failure for
+        # another. Editing the file sidesteps the whole problem.
+        try:
+            if not SETTINGS_PATH.exists():
+                save_settings(self.servers, self.active)
+            os.startfile(str(SETTINGS_PATH))  # noqa: S606 -- user's own settings file
+            icon.notify("Edit the file, then choose Reload servers.", "KubunDictate")
+        except Exception:
+            log("opening the settings file failed", exc=True)
+
+    def _on_reload(self, icon, item):
+        try:
+            self.servers, self.active = load_settings()
+            self._apply_active()
+            self._refresh_menu()
+            active = self._active_entry()
+            icon.notify(
+                f"Using {active['name']}." if active else "No servers configured.",
+                "KubunDictate",
+            )
+        except Exception:
+            log("reloading the settings file failed", exc=True)
 
     def _on_toggle_startup(self, icon, item):
         set_startup_enabled(not is_startup_enabled())
@@ -298,17 +370,18 @@ class TrayApp:
         # chevron by default -- there's no supported way to force
         # always-visible from the app side, so nudge the user to it once.
         icon.visible = True
-        if self._first_run:
+        if not self.servers:
+            icon.notify(
+                "No server set up yet. Right-click the icon -> Edit servers...",
+                "KubunDictate",
+            )
+        elif self._first_run:
             icon.notify("Running in the system tray -- look for it near the clock.", "KubunDictate")
 
     def run(self):
-        self._first_run = not self.recent
-        if self._first_run:
-            result = self._prompt_for_server()
-            if not result:
-                return
-            self.recent = add_or_promote(self.recent, result["url"], result["token"])
-            save_recent(self.recent)
+        # Servers come from the settings file, written by the installer
+        # and editable from the menu -- the client never prompts.
+        self._first_run = not SETTINGS_PATH.exists()
         self._apply_active()
         self._refresh_menu()
 
@@ -356,6 +429,10 @@ def _enable_dpi_awareness():
 
 def main():
     _enable_dpi_awareness()
+    # Route the engine's diagnostics into the same file. Under pythonw.exe
+    # its print() output has nowhere to go, which is how a dead audio
+    # stream stayed invisible.
+    client.log = log
     TrayApp().run()
 
 

@@ -1,6 +1,6 @@
 """Transcription server: loads faster-whisper once, serves it over HTTP.
 
-Entrypoint -- run directly via start_server.bat/start_server_hidden.bat
+Entrypoint -- run directly via start.bat/start_hidden.bat
 (see README.md for configuration). Keeps the model resident in VRAM
 between requests.
 """
@@ -40,7 +40,7 @@ DEVICE = "cuda"
 COMPUTE_TYPE = "float16"
 LANGUAGE = os.environ.get("KUBUNDICTATE_LANGUAGE") or None  # None = auto-detect
 HOST = os.environ.get("KUBUNDICTATE_HOST", "0.0.0.0")
-PORT = int(os.environ.get("KUBUNDICTATE_PORT", "50505"))
+PORT = int(os.environ.get("KUBUNDICTATE_PORT", "9505"))
 TOKEN = os.environ.get("KUBUNDICTATE_TOKEN") or None
 
 # --------------------------------------------------------------------------

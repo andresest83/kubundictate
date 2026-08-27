@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Fully removes the mac client's local state -- venv, settings,
 # LaunchAgent, and the Accessibility/Input Monitoring permission grants
-# for Terminal -- so the next ./install_client_mac.sh + ./start_tray_mac.sh
-# is a genuine first-run, including the native permission dialogs firing
-# again. Doesn't touch anything tracked in git, only local machine state.
+# for Terminal -- so the next ./client/mac/install.sh +
+# ./client/mac/start_tray.sh is a genuine first-run, including the native
+# permission dialogs firing again. Doesn't touch anything tracked in git,
+# only local machine state.
+#
+# Unlike the Windows uninstaller, this deletes the venv unconditionally:
+# the server is Windows-only, so a Mac never shares its venv with one.
 
 set -uo pipefail  # no -e: keep going even if a step is already gone/fails
 
@@ -11,7 +15,10 @@ BOLD=$'\033[1m'
 YELLOW=$'\033[0;33m'
 RESET=$'\033[0m'
 
+# This script sits two levels down (client/mac/); the venv is at the repo
+# root.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/../.." && pwd)"
 
 echo "=== KubunDictate mac client uninstaller ==="
 echo ""
@@ -20,7 +27,7 @@ echo "Stopping any running instance..."
 pkill -f "tray_client_mac.py" 2>/dev/null || true
 
 echo "Removing venv..."
-rm -rf "$script_dir/venv"
+rm -rf "$repo_root/venv"
 
 echo "Removing settings (~/Library/Application Support/KubunDictate)..."
 rm -rf ~/"Library/Application Support/KubunDictate"
@@ -46,6 +53,6 @@ fi
 
 echo ""
 echo "${BOLD}${YELLOW}Done.${RESET} Fully quit Terminal (Cmd+Q, all windows), reopen it, then:"
-echo "  ./install_client_mac.sh"
-echo "  ./start_tray_mac.sh"
+echo "  ./client/mac/install.sh"
+echo "  ./client/mac/start_tray.sh"
 echo "Both permission dialogs should appear fresh on this next launch."

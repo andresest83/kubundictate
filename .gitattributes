@@ -1,0 +1,12 @@
+# Pin line endings per file type so they don't depend on each machine's
+# core.autocrlf setting. This matters most for the Mac client's shell
+# scripts: a .sh checked out with CRLF fails on macOS with a confusing
+# "bad interpreter: /usr/bin/env bash^M" error.
+*.sh   text eol=lf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+*.py   text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+
+*.png  binary
