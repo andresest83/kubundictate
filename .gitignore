@@ -4,3 +4,7 @@ __pycache__/
 *.log
 config.bat
 server-token.txt
+
+# Local reference material for Claude, not part of the project
+docs/coding-agent-*
+docs/inworld_*
