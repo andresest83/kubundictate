@@ -79,6 +79,23 @@ if ($writeSettings) {
         $servers += [ordered]@{ name = "Tailscale"; url = $tailscale.Trim(); token = $tokenValue }
     }
 
+    # Cloud option (#47): the client sends audio straight to Inworld, no
+    # GPU box involved. The key itself is never written here -- it's read
+    # from INWORLD_API_KEY at runtime (an "api_key" field can be added to
+    # the entry by hand on machines where an env var is awkward).
+    Write-Output ""
+    Write-Output "Optional: Inworld cloud transcription (audio leaves your network)."
+    $addInworld = Read-Host "Add Inworld as a server choice? [y/N]"
+    if ($addInworld.Trim().ToLower() -eq "y") {
+        $servers += [ordered]@{ name = "Inworld"; provider = "inworld"; language = $null }
+        $keySet = [Environment]::GetEnvironmentVariable("INWORLD_API_KEY", "User") -or
+            [Environment]::GetEnvironmentVariable("INWORLD_API_KEY", "Machine")
+        if (-not $keySet) {
+            Write-Warning ("INWORLD_API_KEY is not set on this PC. Set it as a User or " +
+                "System environment variable, then sign out and back in before using Inworld.")
+        }
+    }
+
     if (-not (Test-Path $settingsDir)) {
         New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
     }

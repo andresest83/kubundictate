@@ -3,11 +3,13 @@
 ![KubunDictate architecture](docs/kubundictate-architecture.png)
 
 **TL;DR:** Hold a key, talk, let go, and your words land on your
-clipboard, ready to paste anywhere. It runs entirely on your own hardware: no
-cloud, no accounts, nothing leaves your network. One computer with a
-graphics card does the actual transcribing; any other Windows PC or
+clipboard, ready to paste anywhere. By default it runs entirely on your own
+hardware: no cloud, no accounts, nothing leaves your network. One computer
+with a graphics card does the actual transcribing; any other Windows PC or
 Mac on the same network can use it. Windows and Mac are both done and
-working today.
+working today. On Windows you can also opt in to a
+[cloud transcription service](#cloud-transcription-inworld) instead,
+when accuracy matters more than keeping audio at home.
 
 ## What you need
 
@@ -145,6 +147,35 @@ need from the tray menu. Nothing has to be opened up to the internet.
 
   `token` is only needed if you set a shared password on the server.
 
+## Cloud transcription (Inworld)
+
+**Windows only for now.** Instead of your own server, a client can send
+its audio straight to [Inworld](https://inworld.ai/)'s speech-to-text
+service. It's more accurate than the local model, and it works with the
+server PC switched off. The trade-off: your recordings leave your network,
+and it uses Inworld credits.
+
+1. Put your Inworld API key in an environment variable named
+   `INWORLD_API_KEY` (Windows Settings, then search for "environment
+   variables"), then sign out and back in so the client can see it.
+2. Say yes when the client installer asks about Inworld, or add this
+   entry to your server list by hand:
+
+   ```json
+   { "name": "Inworld", "provider": "inworld", "language": null }
+   ```
+
+3. Pick **Inworld** from the tray menu.
+
+Optional extras on that entry: `"language": "en"` (or `"es"`, `"de"`, …)
+tells it which language to expect, which helps on very short clips. Leave
+it `null` to have it detect the language each time. You can keep one entry
+per language if you switch often. `"api_key": "..."` stores the key in the
+file instead of the environment variable.
+
+If the key is missing or wrong, the popup says **Cloud API key missing or
+rejected** and `client.log` says which.
+
 ## If something's not working
 
 The client writes a log you can check:
@@ -207,6 +238,7 @@ docs/            diagrams used by this README
 |---|---|
 | `client.py` | Shared recording/transcribing logic used by both clients |
 | `audio.py` | Encodes recorded audio (the client half of the format) |
+| `inworld.py` | Sends audio to Inworld's cloud transcription instead of your server |
 | `tray_client.py` / `win_toast.py` | Windows tray client and its on-screen popup |
 | `tray_client_mac.py` / `mac_toast.py` | Mac menu-bar client and its popup |
 | `icons/` | Tray and popup artwork |

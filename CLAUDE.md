@@ -350,6 +350,31 @@ per issue:
   while recording or transcribing. Worth remembering: that watchdog was
   speculative, guarding a failure never actually observed, while the
   audio half was evidenced twice.
+- [#47](https://github.com/andresest83/kubundictate/issues/47)
+  **Cloud STT provider: Inworld** (`priority: high`) -- implemented
+  2026-10-05, pending hands-on verification. Motivation: the local
+  model made too many mistakes in real use, and there is a large pool
+  of Inworld credits. A server-list entry with `"provider": "inworld"`
+  (no url) makes the client call Inworld's sync endpoint directly
+  (`client/inworld.py`) -- no server change, works with the GPU box
+  off. Decided: client-direct rather than server-proxied; key from
+  `INWORLD_API_KEY` with an optional per-entry `api_key` override;
+  language auto-detected with an optional per-entry hint; **Windows
+  only** -- the Mac client ignores the entry until #46 is sorted out.
+  Inworld takes the exact same 16 kHz WAV our server does. Notes:
+  - Inworld rejects a bad key with HTTP 403 / gRPC code 7, not the
+    401/code 16 its docs list -- both are handled.
+  - Fixed along the way: `client.py` reported an empty result as
+    `"no speech detected"` but both toasts looked up `"no-speech"`, and
+    unknown keys defaulted to "Copied to clipboard" -- so silence
+    claimed to have copied something. The engine now sends
+    `"no-speech"` (fixes Mac too), and `win_toast.py` treats anything
+    unrecognized as an error.
+  - The machine's key is set at Machine scope; processes started before
+    it was set (including an already-running tray client) don't see it
+    until sign-out/in.
+  - Possible follow-up: Inworld's `prompts` field (custom vocabulary)
+    -- it heard "KubunDictate" as "Qubon Dictate" in testing.
 - [#5](https://github.com/andresest83/kubundictate/issues/5)
   **Auto-paste vs. clipboard-only** (`priority: medium`, see Product
   notes) -- investigate a Windows `SendInput`-based auto-paste option
