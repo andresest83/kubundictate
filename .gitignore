@@ -8,3 +8,6 @@ server-token.txt
 # Local reference material for Claude, not part of the project
 docs/coding-agent-*
 docs/inworld_*
+
+# Models downloaded by the server (backends/parakeet.py)
+server/models/

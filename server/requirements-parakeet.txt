@@ -2,4 +2,6 @@
 # top of requirements.txt by switch_model.ps1. The CUDA 12 runtime libraries
 # come from requirements.txt's nvidia-* packages (see backends/cuda_dlls.py).
 onnx-asr[hub]
-onnxruntime-gpu
+# Newer onnxruntime-gpu builds (1.24+) want CUDA 13 and silently fall back to
+# the CPU against our CUDA 12 libraries. Stay on the CUDA 12 builds.
+onnxruntime-gpu<1.24

@@ -68,6 +68,17 @@ if ($extra) {
         Write-Error "pip install failed -- model not switched, config.bat untouched."
         exit 1
     }
+    if ($Model.ToLower() -eq "parakeet-v3") {
+        # onnx-asr may also pull in the CPU-only "onnxruntime". It shares a
+        # package folder with onnxruntime-gpu, so the two overwrite each
+        # other; remove it and put the GPU files back.
+        & $venvPython -m pip uninstall -y onnxruntime | Out-Null
+        & $venvPython -m pip install --force-reinstall --no-deps "onnxruntime-gpu<1.24"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Reinstalling onnxruntime-gpu failed -- model not switched, config.bat untouched."
+            exit 1
+        }
+    }
 }
 
 # --- config.bat ---
