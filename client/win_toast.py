@@ -256,6 +256,7 @@ def _build_frames():
         "copied": _compose(icons["idle"], "Copied to clipboard", font),
         "no-speech": _compose(icons["idle"], "No speech detected", font),
         "error": _compose(icons["idle"], "Couldn't reach server", font),
+        "bad-key": _compose(icons["idle"], "Cloud API key missing or rejected", font),
     }
 
 
@@ -289,7 +290,7 @@ class Toast:
 
     def show_result(self, error):
         # error is None for a successful "copied" outcome, else one of
-        # "no-speech" / "could not reach server".
+        # "no-speech" / "bad-key" / "could not reach server".
         self._post(("result", error))
 
     def hide(self):
@@ -370,7 +371,15 @@ class Toast:
                 elif kind == "result":
                     user32.KillTimer(hwnd, TIMER_PULSE)
                     error = item[1]
-                    state = {"no-speech": "no-speech", "could not reach server": "error"}.get(error, "copied")
+                    # Only None means success. Anything unrecognized is
+                    # an error -- defaulting to "copied" is how an empty
+                    # result used to claim it had copied something.
+                    if error is None:
+                        state = "copied"
+                    elif error in ("no-speech", "bad-key"):
+                        state = error
+                    else:
+                        state = "error"
                     self._paint(hwnd, state)
                     user32.SetTimer(hwnd, TIMER_HIDE, RESULT_HOLD_MS, None)
                 elif kind == "hide":

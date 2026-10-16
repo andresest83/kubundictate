@@ -1,6 +1,7 @@
 """System-tray client: same record/transcribe engine as client.py, but as
 a tray icon instead of a console window, with a named list of servers to
-switch between (typically a LAN address and a Tailscale one).
+switch between (typically a LAN address and a Tailscale one, plus
+optionally Inworld's cloud STT -- see inworld.py).
 
 Servers live in %APPDATA%\\KubunDictate\\client_settings.json -- written
 by the installer, editable straight from the tray menu, and separate from
@@ -25,6 +26,7 @@ from PIL import Image
 import pystray
 
 import client
+import inworld
 import win_toast
 
 # Assumed when an address is written without one. Matches the port
@@ -123,6 +125,18 @@ def load_settings():
     for index, entry in enumerate(raw):
         if not isinstance(entry, dict):
             continue
+        if entry.get("provider") == client.PROVIDER_INWORLD:
+            # Cloud entry (#47): no url or token, just an optional key
+            # override (else INWORLD_API_KEY) and language hint.
+            servers.append(
+                {
+                    "name": (entry.get("name") or "").strip() or "Inworld",
+                    "provider": client.PROVIDER_INWORLD,
+                    "api_key": entry.get("api_key") or None,
+                    "language": (entry.get("language") or "").strip() or None,
+                }
+            )
+            continue
         url = (entry.get("url") or "").strip()
         if not url:
             continue
@@ -162,6 +176,13 @@ def display_url(url):
     reads the way the user typed it rather than the way we stored it."""
     prefix = "http://"
     return url[len(prefix):] if url.startswith(prefix) else url
+
+
+def _entry_location(entry):
+    """The parenthesized part of a server's menu label."""
+    if entry.get("provider") == client.PROVIDER_INWORLD:
+        return f"Inworld cloud, {entry['language']}" if entry["language"] else "Inworld cloud"
+    return display_url(entry["url"])
 
 
 def _fill_frame(img, size):
@@ -271,9 +292,24 @@ class TrayApp:
 
     def _apply_active(self):
         entry = self._active_entry()
-        if entry:
+        if not entry:
+            return
+        if entry.get("provider") == client.PROVIDER_INWORLD:
+            client.settings.provider = client.PROVIDER_INWORLD
+            client.settings.api_key = entry["api_key"]
+            client.settings.language = entry["language"]
+            # Where the key comes from, never the key itself. A missing
+            # one is worth flagging now rather than at the first F9.
+            _key, source = inworld.resolve_key(entry["api_key"])
+            log(
+                f"Using Inworld cloud STT (key from {source or 'NOWHERE -- not set'}, "
+                f"language {entry['language'] or 'auto-detect'})"
+            )
+        else:
+            client.settings.provider = "kubundictate"
             client.settings.server_url = entry["url"]
             client.settings.token = entry["token"]
+            log(f"Using server {entry['url']}")
 
     def _refresh_menu(self):
         self.icon.menu = self._build_menu()
@@ -292,7 +328,7 @@ class TrayApp:
         for entry in self.servers:
             items.append(
                 pystray.MenuItem(
-                    f"{entry['name']}  ({display_url(entry['url'])})",
+                    f"{entry['name']}  ({_entry_location(entry)})",
                     self._make_select_handler(entry),
                     checked=self._make_checked(entry),
                     radio=True,

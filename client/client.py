@@ -16,6 +16,7 @@ import sounddevice as sd
 import pyperclip
 from pynput import keyboard
 
+import inworld
 from audio import float32_to_wav_bytes
 
 # Diagnostics sink. The tray clients replace this with their file logger:
@@ -31,6 +32,14 @@ class Settings:
 
     server_url = os.environ.get("KUBUNDICTATE_SERVER_URL")
     token = os.environ.get("KUBUNDICTATE_TOKEN") or None
+    # "kubundictate" = our own server at server_url; "inworld" = Inworld's
+    # cloud STT, called directly (#47), which ignores server_url/token.
+    provider = "kubundictate"
+    api_key = None  # inworld only; None falls back to INWORLD_API_KEY
+    language = None  # inworld only; None = auto-detect
+
+
+PROVIDER_INWORLD = "inworld"
 
 
 settings = Settings()
@@ -150,23 +159,27 @@ def stop_recording_and_transcribe():
         _set_result(None, "aborted")
         return
 
-    print(f"[sending {duration:.1f}s of audio to {settings.server_url}...]")
     wav_bytes = float32_to_wav_bytes(audio, SAMPLE_RATE)
-    headers = {"Authorization": f"Bearer {settings.token}"} if settings.token else {}
 
     _transcribing = True
     try:
         try:
-            resp = requests.post(
-                f"{settings.server_url}/transcribe",
-                files={"audio": ("clip.wav", wav_bytes, "audio/wav")},
-                headers=headers,
-                timeout=REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
-            text = resp.json()["text"]
-        except requests.RequestException as e:
-            print(f"[error: could not reach server: {e}]")
+            if settings.provider == PROVIDER_INWORLD:
+                log(f"[sending {duration:.1f}s of audio to Inworld...]")
+                text = inworld.transcribe(
+                    wav_bytes, settings.api_key, settings.language, REQUEST_TIMEOUT
+                )
+            else:
+                log(f"[sending {duration:.1f}s of audio to {settings.server_url}...]")
+                text = _transcribe_via_server(wav_bytes)
+        except inworld.KeyProblem as e:
+            log(f"[error: Inworld API key problem: {e}]")
+            _beep(220, 200)
+            _set_result(None, "bad-key")
+            return
+        except (requests.RequestException, ValueError) as e:
+            # ValueError covers a non-JSON reply body.
+            log(f"[error: could not reach server: {e}]")
             _beep(220, 200)
             _set_result(None, "could not reach server")
             return
@@ -178,9 +191,24 @@ def stop_recording_and_transcribe():
             _set_result(text, None)
         else:
             print("[no speech detected]")
-            _set_result(None, "no speech detected")
+            # "no-speech" is the key both toasts look up; this used to send
+            # "no speech detected", which neither recognized, so an empty
+            # result showed "Copied to clipboard".
+            _set_result(None, "no-speech")
     finally:
         _transcribing = False
+
+
+def _transcribe_via_server(wav_bytes):
+    headers = {"Authorization": f"Bearer {settings.token}"} if settings.token else {}
+    resp = requests.post(
+        f"{settings.server_url}/transcribe",
+        files={"audio": ("clip.wav", wav_bytes, "audio/wav")},
+        headers=headers,
+        timeout=REQUEST_TIMEOUT,
+    )
+    resp.raise_for_status()
+    return resp.json()["text"]
 
 
 def run(stop_event):
@@ -189,13 +217,16 @@ def run(stop_event):
     Owned by tray_client.py, which runs this in a background thread and
     sets stop_event from its Quit menu item to stop it cleanly.
     """
-    if not settings.server_url:
+    if settings.provider != PROVIDER_INWORLD and not settings.server_url:
         raise SystemExit(
             "KUBUNDICTATE_SERVER_URL is not set. Point it at the server, "
             "e.g. http://192.168.1.50:9505"
         )
 
-    log(f"Server: {settings.server_url} (token auth: {'on' if settings.token else 'off'})")
+    if settings.provider == PROVIDER_INWORLD:
+        log("Server: Inworld cloud STT")
+    else:
+        log(f"Server: {settings.server_url} (token auth: {'on' if settings.token else 'off'})")
     log(f"Hold {HOTKEY_NAME} to talk, release to transcribe + copy to clipboard.")
 
     def on_press(key):
