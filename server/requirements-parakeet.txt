@@ -1,0 +1,5 @@
+# Extra dependencies for KUBUNDICTATE_MODEL=parakeet-v3 (#49). Installed on
+# top of requirements.txt by switch_model.ps1. The CUDA 12 runtime libraries
+# come from requirements.txt's nvidia-* packages (see backends/cuda_dlls.py).
+onnx-asr[hub]
+onnxruntime-gpu

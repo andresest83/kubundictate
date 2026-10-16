@@ -1,0 +1,7 @@
+# Extra dependencies for KUBUNDICTATE_MODEL=qwen3-asr-1.7b (#49). Installed
+# on top of requirements.txt by switch_model.ps1.
+# The default PyPI torch for Windows is CPU-only; the RTX 50-series
+# (Blackwell) also needs a CUDA 12.8+ build, hence the extra index.
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch
+qwen-asr
