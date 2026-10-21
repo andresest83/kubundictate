@@ -58,6 +58,17 @@ class ParakeetBackend(Backend):
             providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
         )
         self._require_cuda()
+        self._warm_up()
+
+    def _warm_up(self):
+        """The first inference after load takes ~35 s on the RTX 5060 Ti
+        (CUDA kernels for the Blackwell GPU get compiled on first use);
+        every one after it takes ~50 ms. Pay that here, before the server
+        starts listening, instead of on the first dictation -- where the
+        client sat on "Transcribing..." and looked hung."""
+        print("Warming up (one-time GPU kernel compile, ~40 s)...")
+        noise = (0.05 * np.random.randn(3 * SAMPLE_RATE)).astype(np.float32)
+        self._model.recognize(noise, sample_rate=SAMPLE_RATE)
 
     def _require_cuda(self):
         """onnxruntime logs a CUDA failure and then quietly runs on the CPU
