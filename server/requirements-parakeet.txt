@@ -1,7 +1,10 @@
 # Extra dependencies for KUBUNDICTATE_MODEL=parakeet-v3 (#49). Installed on
 # top of requirements.txt by switch_model.ps1. The CUDA 12 runtime libraries
-# come from requirements.txt's nvidia-* packages (see backends/cuda_dlls.py).
+# come from the nvidia-* packages (see backends/cuda_dlls.py); requirements.txt
+# has cublas and cudnn, onnxruntime's CUDA provider also needs these two.
 onnx-asr[hub]
+nvidia-cuda-runtime-cu12
+nvidia-cufft-cu12
 # Newer onnxruntime-gpu builds (1.24+) want CUDA 13 and silently fall back to
 # the CPU against our CUDA 12 libraries. Stay on the CUDA 12 builds.
 onnxruntime-gpu<1.24
